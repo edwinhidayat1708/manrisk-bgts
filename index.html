@@ -1442,11 +1442,75 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 const SUPABASE_URL     = 'https://obevbmjpjjnavdiyajvp.supabase.co';
 const SUPABASE_ANON_KEY= 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9iZXZibWpwampuYXZkaXlhanZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzU5MTEsImV4cCI6MjA5NjYxMTkxMX0.JT2hBSIWrtCUVmj66WTq5daDz8c0i8xCde3URvXcsqw';
 
+// ─── Supabase Auth State ─────────────────────────────
+let _sbSession = null; // stores { access_token, refresh_token, expires_at }
+
+function sbGetToken() {
+  // Return current access token or fall back to anon key
+  return _sbSession?.access_token || SUPABASE_ANON_KEY;
+}
+
+// ─── Supabase Auth API ───────────────────────────────
+const SBAuth = {
+  async signUp(email, password, userData) {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, data: userData })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error_description || d.msg || JSON.stringify(d));
+    return d;
+  },
+
+  async signIn(email, password) {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error_description || d.msg || JSON.stringify(d));
+    return d; // { access_token, refresh_token, user, ... }
+  },
+
+  async signOut(token) {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + token }
+    }).catch(() => {});
+  },
+
+  async refreshToken(refresh_token) {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error_description || d.msg || JSON.stringify(d));
+    return d;
+  }
+};
+
+// Auto-refresh session before expiry
+setInterval(async () => {
+  if (!_sbSession) return;
+  const expiresAt = _sbSession.expires_at * 1000;
+  if (Date.now() > expiresAt - 5 * 60 * 1000) { // 5 menit sebelum expire
+    try {
+      const d = await SBAuth.refreshToken(_sbSession.refresh_token);
+      _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
+      localStorage.setItem('sbSession', JSON.stringify(_sbSession));
+    } catch(e) { console.warn('[Auth] Refresh token gagal:', e.message); }
+  }
+}, 60 * 1000); // cek tiap menit
+
 // ─── Supabase REST helper ────────────────────────────
 const SB = {
   headers: () => ({
     'apikey':        SUPABASE_ANON_KEY,
-    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + sbGetToken(),
     'Content-Type':  'application/json',
     'Prefer':        'return=representation',
   }),
@@ -1597,34 +1661,159 @@ function rowToRisk(row) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  AUTH — Login form sederhana (nama + email + unit)
+//  AUTH — Supabase Auth (email + password)
 // ═══════════════════════════════════════════════════════
 let sbUser = null;
 
-function gsLogin() { showModal('gs-login-modal'); }
-
-function gsDoLogin() {
-  const name  = document.getElementById('gs-input-name').value.trim();
-  const email = document.getElementById('gs-input-email').value.trim();
-  const unit  = document.getElementById('gs-input-unit').value.trim();
-  if (!name)  { alert('Nama wajib diisi!'); return; }
-  if (!email || !email.includes('@')) { alert('Email tidak valid!'); return; }
-
-  sbUser = { name, email, unit: unit||'-' };
-  sbUser.displayName = unit ? name + ' (' + unit + ')' : name;
-  localStorage.setItem('sbUser', JSON.stringify(sbUser));
-
-  closeModal('gs-login-modal');
-  gsUpdateUI(true);
-  showToast('✅ Login sebagai ' + name);
-  sbLoadAll();
+function gsLogin() {
+  // Reset form
+  ['gs-input-email','gs-input-password','gs-signup-name','gs-signup-unit','gs-signup-email','gs-signup-password','gs-signup-password2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  gsShowAuthTab('login');
+  showModal('gs-login-modal');
 }
 
-function gsLogout() {
+function gsShowAuthTab(tab) {
+  const loginPanel  = document.getElementById('gs-panel-login');
+  const signupPanel = document.getElementById('gs-panel-signup');
+  const tabLogin    = document.getElementById('gs-tab-login');
+  const tabSignup   = document.getElementById('gs-tab-signup');
+  if (!loginPanel) return;
+  if (tab === 'login') {
+    loginPanel.style.display  = '';
+    signupPanel.style.display = 'none';
+    tabLogin.style.fontWeight  = '700';
+    tabLogin.style.borderBottom = '2px solid var(--accent)';
+    tabSignup.style.fontWeight  = '400';
+    tabSignup.style.borderBottom = '2px solid transparent';
+  } else {
+    loginPanel.style.display  = 'none';
+    signupPanel.style.display = '';
+    tabLogin.style.fontWeight  = '400';
+    tabLogin.style.borderBottom = '2px solid transparent';
+    tabSignup.style.fontWeight  = '700';
+    tabSignup.style.borderBottom = '2px solid var(--accent)';
+  }
+}
+
+async function gsDoLogin() {
+  const email    = document.getElementById('gs-input-email').value.trim();
+  const password = document.getElementById('gs-input-password').value;
+  const errEl    = document.getElementById('gs-login-error');
+  const btn      = document.getElementById('gs-btn-login');
+
+  if (!email || !email.includes('@')) { errEl.textContent = '⚠️ Email tidak valid.'; return; }
+  if (!password) { errEl.textContent = '⚠️ Password wajib diisi.'; return; }
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = '⏳ Masuk...';
+
+  try {
+    const d = await SBAuth.signIn(email, password);
+    _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
+    localStorage.setItem('sbSession', JSON.stringify(_sbSession));
+
+    const meta = d.user?.user_metadata || {};
+    sbUser = {
+      id:          d.user.id,
+      email:       d.user.email,
+      name:        meta.name || email.split('@')[0],
+      unit:        meta.unit || '-',
+    };
+    sbUser.displayName = sbUser.unit !== '-' ? sbUser.name + ' (' + sbUser.unit + ')' : sbUser.name;
+    localStorage.setItem('sbUser', JSON.stringify(sbUser));
+
+    closeModal('gs-login-modal');
+    gsUpdateUI(true);
+    showToast('✅ Login sebagai ' + sbUser.displayName);
+    sbLoadAll();
+  } catch(e) {
+    errEl.textContent = '❌ ' + (e.message.includes('Invalid login') ? 'Email atau password salah.' : e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✅ Masuk';
+  }
+}
+
+async function gsDoSignup() {
+  const name  = document.getElementById('gs-signup-name').value.trim();
+  const unit  = document.getElementById('gs-signup-unit').value.trim();
+  const email = document.getElementById('gs-signup-email').value.trim();
+  const pass1 = document.getElementById('gs-signup-password').value;
+  const pass2 = document.getElementById('gs-signup-password2').value;
+  const errEl = document.getElementById('gs-signup-error');
+  const btn   = document.getElementById('gs-btn-signup');
+
+  if (!name)  { errEl.textContent = '⚠️ Nama wajib diisi.'; return; }
+  if (!email || !email.includes('@')) { errEl.textContent = '⚠️ Email tidak valid.'; return; }
+  if (pass1.length < 6) { errEl.textContent = '⚠️ Password minimal 6 karakter.'; return; }
+  if (pass1 !== pass2)  { errEl.textContent = '⚠️ Konfirmasi password tidak cocok.'; return; }
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = '⏳ Mendaftar...';
+
+  try {
+    await SBAuth.signUp(email, pass1, { name, unit: unit||'-' });
+    // Auto login setelah signup
+    const d = await SBAuth.signIn(email, pass1);
+    _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
+    localStorage.setItem('sbSession', JSON.stringify(_sbSession));
+
+    sbUser = { id: d.user.id, email, name, unit: unit||'-' };
+    sbUser.displayName = unit ? name + ' (' + unit + ')' : name;
+    localStorage.setItem('sbUser', JSON.stringify(sbUser));
+
+    closeModal('gs-login-modal');
+    gsUpdateUI(true);
+    showToast('🎉 Akun dibuat! Login sebagai ' + sbUser.displayName);
+    sbLoadAll();
+  } catch(e) {
+    errEl.textContent = '❌ ' + (e.message.includes('already registered') ? 'Email sudah terdaftar. Silakan login.' : e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📝 Daftar & Masuk';
+  }
+}
+
+async function gsLogout() {
+  if (_sbSession) {
+    await SBAuth.signOut(_sbSession.access_token).catch(() => {});
+    _sbSession = null;
+    localStorage.removeItem('sbSession');
+  }
   sbUser = null;
   localStorage.removeItem('sbUser');
   gsUpdateUI(false);
   showToast('👋 Logout berhasil');
+}
+
+// Restore session dari localStorage saat halaman dimuat
+function gsRestoreSession() {
+  const savedSession = localStorage.getItem('sbSession');
+  const savedUser    = localStorage.getItem('sbUser');
+  if (savedSession && savedUser) {
+    try {
+      _sbSession = JSON.parse(savedSession);
+      sbUser     = JSON.parse(savedUser);
+      // Cek apakah token masih valid (belum expired)
+      if (_sbSession.expires_at && Date.now() > _sbSession.expires_at * 1000) {
+        // Token expired, coba refresh
+        SBAuth.refreshToken(_sbSession.refresh_token).then(d => {
+          _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
+          localStorage.setItem('sbSession', JSON.stringify(_sbSession));
+          gsUpdateUI(true);
+          sbLoadAll();
+        }).catch(() => {
+          _sbSession = null; sbUser = null;
+          localStorage.removeItem('sbSession'); localStorage.removeItem('sbUser');
+          gsUpdateUI(false);
+        });
+      } else {
+        gsUpdateUI(true);
+        sbLoadAll();
+      }
+    } catch(e) {
+      localStorage.removeItem('sbSession'); localStorage.removeItem('sbUser');
+    }
+  }
 }
 
 function gsUpdateUI(loggedIn) {
@@ -3278,15 +3467,8 @@ function init() {
   if(dateEl) dateEl.textContent = new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
 
   // Restore session login jika ada
-  const savedUser = localStorage.getItem('sbUser');
-  if (savedUser) {
-    try {
-      sbUser = JSON.parse(savedUser);
-      gsUpdateUI(true);
-      // Auto-load dari Supabase jika tidak ada cache lokal yang lebih baru
-      setTimeout(() => sbLoadAll(), 800);
-    } catch(e) { localStorage.removeItem('sbUser'); }
-  } else if (hadCache) {
+  gsRestoreSession();
+  if (!localStorage.getItem('sbSession') && hadCache) {
     showToast('💾 Data lokal dipulihkan dari cache browser', 3500);
   }
 }
@@ -3334,34 +3516,84 @@ init();
   <div class="modal" style="width:min(420px,92vw)">
     <div class="modal-head">
       <div>
-        <div class="modal-title">🔑 Login untuk Menyimpan Data</div>
-        <div style="font-size:11px;color:var(--slate);margin-top:2px">Data Anda akan tersimpan di Google Spreadsheet BGTS</div>
+        <div class="modal-title">🔑 Masuk ke ManRisk BGTS</div>
+        <div style="font-size:11px;color:var(--slate);margin-top:2px">Akun Supabase — data tersimpan aman di cloud</div>
       </div>
       <button class="modal-close" onclick="closeModal('gs-login-modal')">✕</button>
     </div>
     <div class="modal-body">
-      <div style="background:rgba(34,211,238,0.07);border:1px solid rgba(34,211,238,0.2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:18px;font-size:12px;color:var(--teal)">
-        ℹ️ Nama dan email Anda akan dicatat di log perubahan, sehingga diketahui siapa yang menginput atau mengedit data.
+      <!-- Tab switcher -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">
+        <button id="gs-tab-login"
+          onclick="gsShowAuthTab('login')"
+          style="flex:1;background:none;border:none;padding:10px;cursor:pointer;color:var(--text-main);font-size:13px;font-family:'DM Sans',sans-serif;font-weight:700;border-bottom:2px solid var(--accent);margin-bottom:-2px;transition:all 0.15s">
+          Masuk
+        </button>
+        <button id="gs-tab-signup"
+          onclick="gsShowAuthTab('signup')"
+          style="flex:1;background:none;border:none;padding:10px;cursor:pointer;color:var(--text-main);font-size:13px;font-family:'DM Sans',sans-serif;font-weight:400;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all 0.15s">
+          Daftar Baru
+        </button>
       </div>
-      <div class="form-group">
-        <label class="form-label">Nama Lengkap</label>
-        <input class="form-input" id="gs-input-name" placeholder="Contoh: Budi Santoso"
-          onkeydown="if(event.key==='Enter')document.getElementById('gs-input-email').focus()">
+
+      <!-- LOGIN PANEL -->
+      <div id="gs-panel-login">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="gs-input-email" type="email" placeholder="budi@pupr.go.id"
+            onkeydown="if(event.key==='Enter')document.getElementById('gs-input-password').focus()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" id="gs-input-password" type="password" placeholder="Password Anda"
+            onkeydown="if(event.key==='Enter')gsDoLogin()">
+        </div>
+        <div id="gs-login-error" style="color:#f87171;font-size:12px;min-height:18px;margin-bottom:8px"></div>
+        <button id="gs-btn-login" onclick="gsDoLogin()"
+          style="width:100%;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s">
+          ✅ Masuk
+        </button>
+        <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--text-sub)">
+          Belum punya akun? <a onclick="gsShowAuthTab('signup')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Daftar di sini</a>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Email</label>
-        <input class="form-input" id="gs-input-email" type="email" placeholder="Contoh: budi@pupr.go.id"
-          onkeydown="if(event.key==='Enter')gsDoLogin()">
+
+      <!-- SIGNUP PANEL -->
+      <div id="gs-panel-signup" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Nama Lengkap</label>
+          <input class="form-input" id="gs-signup-name" placeholder="Contoh: Budi Santoso"
+            onkeydown="if(event.key==='Enter')document.getElementById('gs-signup-unit').focus()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit Kerja <span style="color:var(--slate);font-weight:400">(opsional)</span></label>
+          <input class="form-input" id="gs-signup-unit" placeholder="Contoh: Pokja Tatalaksana"
+            onkeydown="if(event.key==='Enter')document.getElementById('gs-signup-email').focus()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="gs-signup-email" type="email" placeholder="budi@pupr.go.id"
+            onkeydown="if(event.key==='Enter')document.getElementById('gs-signup-password').focus()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password (min. 6 karakter)</label>
+          <input class="form-input" id="gs-signup-password" type="password" placeholder="Buat password baru"
+            onkeydown="if(event.key==='Enter')document.getElementById('gs-signup-password2').focus()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Konfirmasi Password</label>
+          <input class="form-input" id="gs-signup-password2" type="password" placeholder="Ulangi password"
+            onkeydown="if(event.key==='Enter')gsDoSignup()">
+        </div>
+        <div id="gs-signup-error" style="color:#f87171;font-size:12px;min-height:18px;margin-bottom:8px"></div>
+        <button id="gs-btn-signup" onclick="gsDoSignup()"
+          style="width:100%;padding:12px;background:var(--accent3);color:#000;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s">
+          📝 Daftar & Masuk
+        </button>
+        <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--text-sub)">
+          Sudah punya akun? <a onclick="gsShowAuthTab('login')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Masuk di sini</a>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Unit Kerja <span style="color:var(--slate);font-weight:400">(opsional)</span></label>
-        <input class="form-input" id="gs-input-unit" placeholder="Contoh: Pokja Tatalaksana">
-      </div>
-      <button onclick="gsDoLogin()"
-        style="width:100%;padding:12px;background:#4285f4;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;transition:all 0.15s"
-        onmouseover="this.style.background='#3367d6'" onmouseout="this.style.background='#4285f4'">
-        ✅ Masuk & Mulai
-      </button>
     </div>
   </div>
 </div>
