@@ -667,6 +667,22 @@ body.light-mode .theme-toggle::after { left:21px; background:#f0a500; box-shadow
   th,td { color:#000!important; border-color:#ccc!important; }
   th    { background:#e0e0e0!important; }
   .print-header { display:block!important; }
+
+  /* ── Matrix colors — paksa tampil saat print ── */
+  * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; color-adjust:exact!important; }
+  .mc-1,.mc-2,.mc-3,.mc-4,.mc-5   { background:#1a7a3c!important; color:#b8ffd0!important; }
+  .mc-6,.mc-7,.mc-8,.mc-9,.mc-10  { background:#0d5c2e!important; color:#6ee7a0!important; }
+  .mc-11,.mc-12,.mc-13,.mc-14,.mc-15 { background:#b58a00!important; color:#fff0a0!important; }
+  .mc-16,.mc-17,.mc-18,.mc-19     { background:#c05a00!important; color:#ffddaa!important; }
+  .mc-20,.mc-21,.mc-22,.mc-23,.mc-24,.mc-25 { background:#9a0000!important; color:#ffcccc!important; }
+  .matrix-table th                 { background:#1a2e4a!important; color:#fff!important; }
+  .matrix-table .row-header        { background:#2d3748!important; color:#fff!important; }
+  .risk-chip                       { background:rgba(0,0,0,0.6)!important; color:#fff!important; }
+  .legend-dot[style*="1a7a3c"]     { background:#1a7a3c!important; }
+  .legend-dot[style*="0d5c2e"]     { background:#0d5c2e!important; }
+  .legend-dot[style*="b58a00"]     { background:#b58a00!important; }
+  .legend-dot[style*="c05a00"]     { background:#c05a00!important; }
+  .legend-dot[style*="9a0000"]     { background:#9a0000!important; }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -957,9 +973,6 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
       <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()"></button>
       <span id="theme-icon-light" style="font-size:13px">☀️</span>
     </div>
-    <button class="topbar-action btn-ghost" id="btn-edit-mode" onclick="toggleEditMode()">✏️ Edit</button>
-    <button class="topbar-action btn-ghost" id="btn-save" onclick="saveData()" style="display:none">💾 Simpan</button>
-    <button class="topbar-action btn-primary" onclick="exportCsv()">⬇ CSV</button>
     <button class="topbar-action" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.25);font-weight:700;font-size:12px" onclick="doPrint()">🖨 Print/PDF</button>
     <div id="sync-indicator" class="offline" title="Status sinkronisasi dengan Supabase">
       <div id="sync-dot"></div>
@@ -1124,25 +1137,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
       </div>
     </div>
 
-    <div class="card" style="margin-top:18px">
-      <div class="card-head"><div class="card-title">ℹ️ Tentang Supabase Backend</div></div>
-      <div class="card-body">
-        <div class="infobox blue" style="margin-bottom:12px">
-          <span class="infobox-icon">☁️</span>
-          <div>Data disimpan di <strong>Supabase PostgreSQL</strong> — database relasional yang aman, cepat, dan mendukung penulisan bersamaan dari banyak user tanpa risiko data tertimpa.</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div style="background:var(--bg-row);border:1.5px solid var(--border-bright);border-radius:8px;padding:14px">
-            <div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">🔒 Keamanan Data</div>
-            <div style="font-size:11px;color:var(--text-sub);line-height:1.7">Setiap operasi INSERT, UPDATE, DELETE dicatat di tabel <code>audit_log</code> beserta nama user, email, unit, dan waktu perubahan.</div>
-          </div>
-          <div style="background:var(--bg-row);border:1.5px solid var(--border-bright);border-radius:8px;padding:14px">
-            <div style="font-size:11px;font-weight:800;color:var(--accent2);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">💾 Backup Otomatis</div>
-            <div style="font-size:11px;color:var(--text-sub);line-height:1.7">Supabase Pro melakukan backup otomatis harian. Data juga ter-cache di localStorage browser sebagai fallback offline.</div>
-          </div>
-        </div>
-      </div>
-    </div>
+
   </div>
 
   <!-- ── CONTAINER HALAMAN PAKET KEGIATAN (dinamis) ── -->
