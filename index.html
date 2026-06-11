@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V5-10 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-11 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
-   ManRisk BGTS V5-10 — HIGH CONTRAST THEME
+   ManRisk BGTS V5-11 — HIGH CONTRAST THEME
    Dirancang untuk: Zoom/Teams sharing, screen recording
    Backend: Supabase PostgreSQL (replace Google Sheets)
    Prinsip: Warna SOLID, kontras TINGGI, tidak pucat
@@ -123,11 +123,11 @@ body {
   cursor:pointer; flex-shrink:0; transition:all 0.15s; display:flex; align-items:center; justify-content:center;
 }
 .nav-del-pkg-btn {
-  margin-left:2px; background:rgba(239,68,68,0.15); border:none; border-radius:4px;
-  color:#f87171; cursor:pointer; font-size:11px; padding:2px 5px; opacity:0;
-  transition:opacity 0.15s;
+  margin-left:2px; background:transparent; border:none; border-radius:4px;
+  color:rgba(248,113,113,0.35); cursor:pointer; font-size:12px; padding:2px 4px;
+  transition:all 0.15s; flex-shrink:0; line-height:1;
 }
-.nav-item:hover .nav-del-pkg-btn { opacity:1; }
+.nav-item:hover .nav-del-pkg-btn { color:#f87171; background:rgba(239,68,68,0.2); }
 .nav-add-btn:hover { background:var(--accent2); color:#000; border-color:var(--accent2); }
 
 .sidebar-footer {
@@ -1413,7 +1413,8 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-10 (2026-06-11)
+//  VERSI: v5-11 (2026-06-11)
+//  CHANGES: fix sbLoadAll reset packages, fix nav-del-pkg visibility, validasi edit, RLS SQL
 //  CHANGES: fix auto-save bug, hapus offline queue UI, tambah hapus paket kegiatan
 //  FIX: Menambahkan <div id="pkg-pages"></div> yang hilang di v5-8
 //       sehingga halaman Identifikasi/Analisa/Evaluasi/Pengendalian/Residual/Matrik
@@ -1836,22 +1837,16 @@ async function sbLoadAll() {
   setSyncState('syncing');
 
   try {
-    // Muat packages
-    const pkgRows = await SB.get('packages', '?select=*&order=id');
-    pkgRows.forEach(p => {
-      if (!packages[p.id]) {
-        packages[p.id] = { id: p.id, name: p.name, icon: p.icon||'📁', anggaran: parseFloat(p.anggaran)||0, risks: [] };
-      } else {
-        packages[p.id].name     = p.name;
-        packages[p.id].anggaran = parseFloat(p.anggaran)||0;
-      }
-    });
-
-    // Muat risks
+    // Muat packages + risks — RESET PENUH dari Supabase (bukan merge cache)
+    const pkgRows  = await SB.get('packages', '?select=*&order=id');
     const riskRows = await SB.get('risks', '?select=*&order=pkg_id,id');
 
-    // Reset risks
-    Object.values(packages).forEach(p => p.risks = []);
+    // Kosongkan packages sepenuhnya agar data hapus ikut terhapus
+    Object.keys(packages).forEach(k => delete packages[k]);
+
+    pkgRows.forEach(p => {
+      packages[p.id] = { id: p.id, name: p.name, icon: p.icon||'📁', anggaran: parseFloat(p.anggaran)||0, risks: [] };
+    });
 
     riskRows.forEach(row => {
       if (!packages[row.pkg_id]) {
@@ -3043,7 +3038,7 @@ function exportCsv() {
   const csv = rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-  a.download = 'ManRisk_BGTS_V5-10.csv';
+  a.download = 'ManRisk_BGTS_V5-11.csv';
   a.click();
 }
 
@@ -3764,6 +3759,19 @@ function doEditRisk() {
   const r     = packages[pkgId]?.risks[rIdx];
   if(!r) return;
 
+  // ── Validasi field wajib ──────────────────────────────
+  const newAktivitas  = document.getElementById('er-aktivitas').value.trim();
+  const newPernyataan = document.getElementById('er-pernyataan').value.trim();
+  const newFinbench   = parseFloat(document.getElementById('er-finbench').value);
+  const errs = [];
+  const markEr = (id, msg) => { const el=document.getElementById(id); if(el){ el.classList.add('invalid'); el.classList.remove('valid'); } errs.push(msg); };
+  const markOk = (id)      => { const el=document.getElementById(id); if(el){ el.classList.add('valid');   el.classList.remove('invalid'); } };
+  ['er-aktivitas','er-pernyataan','er-finbench'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.classList.remove('invalid','valid'); } });
+  if(!newAktivitas)        markEr('er-aktivitas',  'Aktivitas wajib diisi');  else markOk('er-aktivitas');
+  if(!newPernyataan)       markEr('er-pernyataan', 'Pernyataan Risiko wajib diisi'); else markOk('er-pernyataan');
+  if(!newFinbench||newFinbench<=0) markEr('er-finbench', 'Financial Benchmark harus diisi'); else markOk('er-finbench');
+  if(errs.length > 0) { showToast('⚠️ ' + errs[0], 4000); return; }
+
   const selKat = [...document.querySelectorAll('#er-kat-chips .kat-chip.selected')].map(b=>b.dataset.val).join('; ');
   const selJenis = [...document.querySelectorAll('.er-jenis-cb:checked')].map(c=>c.value).join('; ');
 
@@ -3806,10 +3814,6 @@ function doEditRisk() {
   const tabIdx = currentTab[pkgId]||0;
   renderPkgTab(pkgId, tabIdx);
 
-  const toast = document.getElementById('save-toast');
-  toast.textContent = '✅ Risiko ' + r.id + ' berhasil diperbarui!';
-  toast.classList.add('show');
-  setTimeout(()=>{ toast.classList.remove('show'); toast.textContent='✅ Data berhasil disimpan!'; }, 2500);
 }
 function toggleEditMode() {
   editModeOn = !editModeOn;
