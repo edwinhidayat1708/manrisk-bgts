@@ -7,9 +7,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
-   ManRisk BGTS V4 — HIGH CONTRAST THEME
+   ManRisk BGTS V5-9 — HIGH CONTRAST THEME
    Dirancang untuk: Zoom/Teams sharing, screen recording
+   Backend: Supabase PostgreSQL (replace Google Sheets)
    Prinsip: Warna SOLID, kontras TINGGI, tidak pucat
+   Update: 2026-06-11 — pkg-pages fix, full tab restored
    ═══════════════════════════════════════════════════ */
 
 /* ─── DARK MODE VARS ────────────────────────────── */
@@ -2526,7 +2528,7 @@ function renderAnalisa(pkg) {
     </tr>`;}).join('');
 
   return `<div class="formula">
-    <div class="formula-title">Metode Analisis Risiko V4</div>
+    <div class="formula-title">Metode Analisis Risiko V5-9</div>
     <div class="formula-grid">
       <div><div class="formula-item"><label>Nilai Risiko (Matriks)</label><div class="formula-eq"><span>Bobot</span> = Nilai K × Nilai D</div></div></div>
       <div><div class="formula-item"><label>Financial Loss</label><div class="formula-eq"><span>EMV</span> = Probability × Financial Benchmark</div></div></div>
@@ -2703,7 +2705,7 @@ function renderResidual(pkg) {
     </div>
   </div>
   <div class="card">
-    <div class="card-head"><div class="card-title">🔄 Langkah 5: Tabel Residual Risiko (V4)</div></div>
+    <div class="card-head"><div class="card-title">🔄 Langkah 5: Tabel Residual Risiko (V5-9)</div></div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Kode</th><th>Analisis K Residual</th><th>Nilai K Res</th><th>Analisis D Residual</th><th>Nilai D Res</th><th>Prob Residual</th><th>Financial Benchmark</th><th>Bobot Awal</th><th>Bobot Residual</th><th>EMV Residual</th><th>% Pagu</th><th>PJ RTP</th><th>Target</th><th>Luaran</th><th>Approval Pengawasan</th><th>Aksi</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -2747,7 +2749,7 @@ function renderMatrik(pkg) {
 
   return `<div class="infobox blue">
     <span class="infobox-icon">🎯</span>
-    <div><strong>Matriks Risiko V4</strong> — Posisi risiko ditentukan oleh <strong>Nilai K × D</strong>. Perubahan posisi dari inherent ke residual menunjukkan efektivitas pengendalian.</div>
+    <div><strong>Matriks Risiko V5-9</strong> — Posisi risiko ditentukan oleh <strong>Nilai K × D</strong>. Perubahan posisi dari inherent ke residual menunjukkan efektivitas pengendalian.</div>
   </div>
   <div class="card">
     <div class="card-head">
@@ -3037,7 +3039,7 @@ function exportCsv() {
   const csv = rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-  a.download = 'ManRisk_BGTS_V4.csv';
+  a.download = 'ManRisk_BGTS_V5-9.csv';
   a.click();
 }
 
