@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V5-9 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-10 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
-   ManRisk BGTS V5-9 — HIGH CONTRAST THEME
+   ManRisk BGTS V5-10 — HIGH CONTRAST THEME
    Dirancang untuk: Zoom/Teams sharing, screen recording
    Backend: Supabase PostgreSQL (replace Google Sheets)
    Prinsip: Warna SOLID, kontras TINGGI, tidak pucat
@@ -122,6 +122,12 @@ body {
   background:none; color:var(--text-sub); font-size:14px; font-weight:700;
   cursor:pointer; flex-shrink:0; transition:all 0.15s; display:flex; align-items:center; justify-content:center;
 }
+.nav-del-pkg-btn {
+  margin-left:2px; background:rgba(239,68,68,0.15); border:none; border-radius:4px;
+  color:#f87171; cursor:pointer; font-size:11px; padding:2px 5px; opacity:0;
+  transition:opacity 0.15s;
+}
+.nav-item:hover .nav-del-pkg-btn { opacity:1; }
 .nav-add-btn:hover { background:var(--accent2); color:#000; border-color:var(--accent2); }
 
 .sidebar-footer {
@@ -1407,7 +1413,8 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-9 (2026-06-11)
+//  VERSI: v5-10 (2026-06-11)
+//  CHANGES: fix auto-save bug, hapus offline queue UI, tambah hapus paket kegiatan
 //  FIX: Menambahkan <div id="pkg-pages"></div> yang hilang di v5-8
 //       sehingga halaman Identifikasi/Analisa/Evaluasi/Pengendalian/Residual/Matrik
 //       kini tampil kembali saat memilih Paket Kegiatan.
@@ -1876,13 +1883,17 @@ const gsLoadAll = sbLoadAll;
 //  SAVE ONE RISK
 // ═══════════════════════════════════════════════════════
 async function gsSaveOneRisk(pkgId, risk, isEdit) {
-  cacheLocalData();
-  if (!sbUser) return;
+  if (!sbUser) {
+    cacheLocalData(); // simpan ke cache jika offline
+    return;
+  }
   setSyncState('syncing');
   try {
     await SB.upsert('risks', riskToRow(risk, pkgId));
+    cacheLocalData(); // cache SETELAH berhasil simpan ke Supabase (bukan sebelum)
     sbAuditLog(isEdit ? 'UPDATE' : 'INSERT', risk.id, pkgId, null, null);
     setSyncState('synced');
+    showToast('✅ Risiko ' + risk.id + ' tersimpan ke Supabase');
   } catch(e) {
     setSyncState('unsynced');
     showToast('❌ Gagal simpan: ' + e.message, 5000);
@@ -2857,7 +2868,7 @@ function buildPkgNav() {
     const d = document.createElement('div');
     d.className = 'nav-item';
     d.id = 'nav-'+p.id;
-    d.innerHTML = `<span class="nav-icon">${p.icon}</span><span class="nav-label">${p.name}</span><span class="nav-badge">${p.risks.length}</span><button class="nav-add-btn" title="Tambah Risiko" onclick="event.stopPropagation();openAddRisk('${p.id}')">+</button>`;
+    d.innerHTML = `<span class="nav-icon">${p.icon}</span><span class="nav-label">${p.name}</span><span class="nav-badge">${p.risks.length}</span><button class="nav-add-btn" title="Tambah Risiko" onclick="event.stopPropagation();openAddRisk('${p.id}')">+</button><button class="nav-del-pkg-btn" title="Hapus Paket Kegiatan ini" onclick="event.stopPropagation();confirmDeletePkg('${p.id}')">🗑</button>`;
     d.addEventListener('click', ()=>showPkg(p.id));
     nav.appendChild(d);
   });
@@ -2995,9 +3006,7 @@ function doAddRisk() {
   }
   packages[pkgId].risks.push(r);
   resetKatChips();
-  markUnsaved();
-  cacheLocalData();       // V5: cache lokal segera
-  gsSaveOneRisk(pkgId, r, false); // auto-save ke Sheets (via queue jika offline)
+  gsSaveOneRisk(pkgId, r, false); // auto-save ke Supabase
   closeModal('add-risk-modal');
   buildPkgNav();
   const existing = document.getElementById('page-'+pkgId);
@@ -3034,7 +3043,7 @@ function exportCsv() {
   const csv = rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-  a.download = 'ManRisk_BGTS_V5-9.csv';
+  a.download = 'ManRisk_BGTS_V5-10.csv';
   a.click();
 }
 
@@ -3053,9 +3062,7 @@ function init() {
 
   // Restore session login jika ada
   gsRestoreSession();
-  if (!localStorage.getItem('sbSession') && hadCache) {
-    showToast('💾 Data lokal dipulihkan dari cache browser', 3500);
-  }
+  // cache lokal hanya sebagai fallback sementara, bukan primary storage
 }
 init();
 </script>
@@ -3601,6 +3608,53 @@ window.addEventListener('beforeunload', (e) => {
   }
 });
 
+// ══ HAPUS PAKET KEGIATAN ════════════════════════════════
+let _delPkgTarget = null;
+
+function confirmDeletePkg(pkgId) {
+  const pkg = packages[pkgId];
+  if (!pkg) return;
+  _delPkgTarget = pkgId;
+  const overlay = document.getElementById('del-overlay');
+  document.getElementById('del-title').textContent = 'Hapus Paket Kegiatan?';
+  document.getElementById('del-sub').textContent =
+    `"${pkg.name}" beserta ${pkg.risks.length} risiko di dalamnya akan dihapus permanen dari Supabase. Tindakan ini tidak bisa dibatalkan.`;
+  document.getElementById('del-confirm-btn').onclick = doDeletePkg;
+  overlay.classList.add('open');
+}
+
+async function doDeletePkg() {
+  if (!_delPkgTarget) return;
+  document.getElementById('del-overlay').classList.remove('open');
+  const pkgId = _delPkgTarget;
+  _delPkgTarget = null;
+
+  // Hapus dari memori lokal
+  delete packages[pkgId];
+  cacheLocalData();
+
+  // Hapus dari Supabase
+  if (sbUser) {
+    try {
+      await SB.delete('risks', `pkg_id=eq.${encodeURIComponent(pkgId)}`);
+      await SB.delete('packages', `id=eq.${encodeURIComponent(pkgId)}`);
+      sbAuditLog('DELETE_PKG', null, pkgId, null, { paket: pkgId });
+      setSyncState('synced');
+      showToast('🗑 Paket ' + pkgId + ' berhasil dihapus');
+    } catch(e) {
+      showToast('❌ Gagal hapus dari server: ' + e.message, 4000);
+      console.error('[SB DeletePkg]', e);
+    }
+  } else {
+    showToast('🗑 Paket ' + pkgId + ' dihapus (lokal)');
+  }
+
+  // Kembali ke dashboard
+  buildPkgNav();
+  renderDashboard();
+  showPage('dashboard');
+}
+
 // ══ HAPUS RISIKO ═══════════════════════════════════════
 let _delPkgId = null, _delRiskIdx = null, _delRiskId = null;
 
@@ -3618,6 +3672,9 @@ function confirmDelete(pkgId, rIdx, riskId) {
 function cancelDelete() {
   document.getElementById('del-overlay').classList.remove('open');
   _delPkgId = _delRiskIdx = _delRiskId = null;
+  _delPkgTarget = null;
+  // reset tombol konfirmasi ke doDelete (hapus risiko)
+  document.getElementById('del-confirm-btn').onclick = doDelete;
 }
 
 
@@ -3741,9 +3798,7 @@ function doEditRisk() {
     luaran:          document.getElementById('er-luaran').value.trim(),
   });
 
-  markUnsaved();
-  cacheLocalData();       // V5: cache lokal segera
-  gsSaveOneRisk(pkgId, r, true); // auto-save ke Sheets (via queue jika offline)
+  gsSaveOneRisk(pkgId, r, true); // auto-save ke Supabase
   closeModal('edit-risk-modal');
   buildPkgNav();
 
