@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V6 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-9 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
@@ -1142,6 +1142,11 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
       </div>
     </div>
   </div>
+
+  <!-- ── CONTAINER HALAMAN PAKET KEGIATAN (dinamis) ── -->
+  <!-- V5-9 FIX: div ini wajib ada agar buildPkgPage() berfungsi -->
+  <div id="pkg-pages"></div>
+
 <div class="modal-overlay" id="add-pkg-modal" onclick="if(event.target===this)closeModal('add-pkg-modal')">
   <div class="modal">
     <div class="modal-head">
@@ -1405,6 +1410,11 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
+//  VERSI: v5-9 (2026-06-11)
+//  FIX: Menambahkan <div id="pkg-pages"></div> yang hilang di v5-8
+//       sehingga halaman Identifikasi/Analisa/Evaluasi/Pengendalian/Residual/Matrik
+//       kini tampil kembali saat memilih Paket Kegiatan.
+
 //  KONFIGURASI SUPABASE
 //  Ganti dua nilai di bawah dengan data dari project Supabase Anda
 // ═══════════════════════════════════════════════════════
