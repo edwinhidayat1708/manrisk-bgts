@@ -624,35 +624,7 @@ body.light-mode .theme-toggle::after { left:21px; background:#f0a500; box-shadow
   .stat-grid { grid-template-columns:repeat(2,1fr); }
 }
 
-/* ─── OFFLINE QUEUE BADGE ────────────────────────── */
-#queue-badge {
-  display:none; align-items:center; gap:5px;
-  font-size:10px; font-weight:800; padding:5px 11px;
-  border-radius:20px; border:2px solid #804000;
-  background:#3a1800; color:#ffab40;
-  white-space:nowrap; cursor:pointer;
-  transition:all 0.3s;
-}
-#queue-badge.has-items { display:flex; animation:queuePulse 2s infinite; }
-@keyframes queuePulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
-#queue-badge:hover { background:#4a2200; border-color:#cc6600; }
 
-/* ─── QUEUE MODAL ────────────────────────────────── */
-.queue-item {
-  display:flex; align-items:center; gap:10px;
-  padding:10px 14px; border-radius:8px; margin-bottom:6px;
-  background:rgba(255,255,255,0.04); border:1px solid var(--border);
-  font-size:12px;
-}
-.queue-item.queued  { border-color:#804000; }
-.queue-item.sending { border-color:#004a80; background:rgba(0,207,255,0.06); }
-.queue-item.done    { border-color:#006630; background:rgba(0,200,83,0.06); }
-.queue-item.failed  { border-color:#880000; background:rgba(255,68,68,0.06); }
-.qi-icon { font-size:18px; flex-shrink:0; }
-.qi-meta { flex:1; }
-.qi-action { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; }
-.qi-id { color:var(--accent2); font-weight:700; }
-.qi-status { font-size:10px; color:var(--text-sub); margin-top:2px; }
 
 /* ─── UTILITY CLASSES (V5 cleanup) ──────────────── */
 .txt-sub    { color:var(--text-sub); }
@@ -987,14 +959,11 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     <button class="topbar-action btn-ghost" id="btn-save" onclick="saveData()" style="display:none">💾 Simpan</button>
     <button class="topbar-action btn-primary" onclick="exportCsv()">⬇ CSV</button>
     <button class="topbar-action" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.25);font-weight:700;font-size:12px" onclick="doPrint()">🖨 Print/PDF</button>
-    <div id="sync-indicator" class="offline" title="Status sinkronisasi dengan Google Sheets">
+    <div id="sync-indicator" class="offline" title="Status sinkronisasi dengan Supabase">
       <div id="sync-dot"></div>
       <span id="sync-label">Offline</span>
     </div>
-    <div id="queue-badge" title="Data tertahan di antrian offline — klik untuk lihat & kirim ulang"
-      onclick="showModal('queue-modal')">
-      📦 <span id="queue-count">0</span> antrian
-    </div>
+
     <div style="width:1px;height:24px;background:rgba(255,255,255,0.1);margin:0 4px"></div>
     <div id="gs-status-pill" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--slate)">
       <span id="gs-dot" style="width:7px;height:7px;border-radius:50%;background:var(--slate);flex-shrink:0"></span>
@@ -1897,34 +1866,19 @@ async function sbLoadAll() {
 const gsLoadAll = sbLoadAll;
 
 // ═══════════════════════════════════════════════════════
-//  SAVE ONE RISK — Simpan/update satu risiko
+//  SAVE ONE RISK
 // ═══════════════════════════════════════════════════════
 async function gsSaveOneRisk(pkgId, risk, isEdit) {
   cacheLocalData();
   if (!sbUser) return;
-
   setSyncState('syncing');
   try {
-    const row = riskToRow(risk, pkgId);
-
-    // Upsert (insert or update berdasarkan id + pkg_id)
-    const result = await SB.upsert('risks', row);
-
-    // Audit log
-    await sbAuditLog(
-      isEdit ? 'UPDATE' : 'INSERT',
-      risk.id, pkgId,
-      isEdit ? null : null,
-      row
-    );
-
+    await SB.upsert('risks', riskToRow(risk, pkgId));
+    sbAuditLog(isEdit ? 'UPDATE' : 'INSERT', risk.id, pkgId, null, null);
     setSyncState('synced');
-    setTimeout(() => setSyncState('synced'), 100);
   } catch(e) {
-    // Masukkan ke antrian offline
-    queuePush({ action: 'saveRisk', risk: riskToRow(risk, pkgId), pkgId, isEdit });
     setSyncState('unsynced');
-    showToast('📦 Tersimpan di antrian offline: ' + e.message, 4000);
+    showToast('❌ Gagal simpan: ' + e.message, 5000);
     console.error('[SB Save]', e);
   }
 }
@@ -1986,11 +1940,10 @@ async function doDelete() {
   if (sbUser) {
     try {
       await SB.delete('risks', `id=eq.${encodeURIComponent(riskId)}&pkg_id=eq.${encodeURIComponent(pkgId)}`);
-      await sbAuditLog('DELETE', riskId, pkgId, null, null);
+      sbAuditLog('DELETE', riskId, pkgId, null, null);
       setSyncState('synced');
     } catch(e) {
-      queuePush({ action: 'deleteRisk', riskId, pkgId, user: sbUser.displayName||sbUser.name, email: sbUser.email });
-      showToast('📦 Hapus masuk antrian offline', 3000);
+      showToast('❌ Gagal hapus dari server: ' + e.message, 4000);
       console.error('[SB Delete]', e);
     }
   }
@@ -2028,28 +1981,13 @@ async function toggleAppr(pkgId, rIdx, field, btn) {
   // Sync ke Supabase
   if (sbUser) {
     try {
-      // Map JS field name ke kolom Supabase
-      const colMap = {
-        appr_ident:   'appr_ident',
-        appr_analisa: 'appr_analisa',
-        appr_eval:    'appr_eval',
-        appr_kend:    'appr_kend',
-        appr_res:     'appr_res',
-      };
-      const col = colMap[field];
-      if (col) {
-        await SB.patch('risks',
-          `id=eq.${encodeURIComponent(r.id)}&pkg_id=eq.${encodeURIComponent(pkgId)}`,
-          { [col]: r[field] }
-        );
-        await sbAuditLog('UPDATE', r.id, pkgId,
-          { [col]: oldVal },
-          { [col]: r[field] }
-        );
-        setSyncState('synced');
-      }
+      await SB.patch('risks',
+        `id=eq.${encodeURIComponent(r.id)}&pkg_id=eq.${encodeURIComponent(pkgId)}`,
+        { [field]: r[field] }
+      );
+      sbAuditLog('UPDATE', r.id, pkgId, { [field]: oldVal }, { [field]: r[field] });
+      setSyncState('synced');
     } catch(e) {
-      // Rollback UI jika gagal
       r[field] = oldVal;
       btn.className   = `appr-toggle ${r[field]?'appr-on':'appr-off'}`;
       btn.textContent = r[field] ? '✓ Approved' : '— Belum';
@@ -2144,118 +2082,10 @@ function backupNow() { showToast('ℹ️ Di Supabase, backup otomatis dilakukan 
 function loadBackupList() { loadAuditLog(); }
 function confirmRestore() { showToast('ℹ️ Restore data dilakukan langsung dari Supabase dashboard', 4000); }
 
-// ═══════════════════════════════════════════════════════
-//  OFFLINE QUEUE ENGINE
-// ═══════════════════════════════════════════════════════
-const QUEUE_KEY = 'manrisk-queue-sb';
+// ─── Cache lokal (fallback & restore saat load) ──────
 const CACHE_KEY = 'manrisk-data-cache-v5';
 const PAGU_KEY  = 'manrisk-pagu';
 
-function queueRead() {
-  try { return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]'); } catch(e) { return []; }
-}
-function queueWrite(items) {
-  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(items)); } catch(e) {}
-  queueUpdateUI();
-}
-function queuePush(item) {
-  const q = queueRead();
-  item.qid     = Date.now() + '_' + Math.random().toString(36).slice(2,7);
-  item.status  = 'queued';
-  item.addedAt = new Date().toISOString();
-  item.retries = 0;
-  q.push(item);
-  queueWrite(q);
-}
-function queueRemove(qid) {
-  queueWrite(queueRead().filter(i => i.qid !== qid));
-}
-function queueUpdateUI() {
-  const q       = queueRead();
-  const pending = q.filter(i => i.status !== 'done');
-  const badge   = document.getElementById('queue-badge');
-  const countEl = document.getElementById('queue-count');
-  if (!badge) return;
-  if (pending.length > 0) {
-    badge.classList.add('has-items');
-    if (countEl) countEl.textContent = pending.length;
-  } else {
-    badge.classList.remove('has-items');
-    if (countEl) countEl.textContent = '0';
-  }
-  const listEl  = document.getElementById('queue-list');
-  const emptyEl = document.getElementById('queue-empty');
-  if (!listEl) return;
-  if (q.length === 0) {
-    listEl.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'block';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
-  const actionLabels = {
-    saveRisk:   { icon:'💾', label:'Simpan Risiko' },
-    deleteRisk: { icon:'🗑', label:'Hapus Risiko'  },
-  };
-  listEl.innerHTML = q.slice().reverse().map(item => {
-    const meta = actionLabels[item.action] || { icon:'📄', label: item.action };
-    const statusMap = { queued:'⏳ Menunggu', sending:'↑ Mengirim...', done:'✅ Berhasil', failed:'❌ Gagal' };
-    const riskId = item.risk?.id || item.riskId || '–';
-    return `<div class="queue-item ${item.status}">
-      <div class="qi-icon">${meta.icon}</div>
-      <div class="qi-meta">
-        <div><span class="qi-action">${meta.label}</span> — <span class="qi-id">${riskId}</span></div>
-        <div class="qi-status">${statusMap[item.status]||item.status} · ${new Date(item.addedAt).toLocaleString('id-ID')}</div>
-      </div>
-      ${item.status !== 'done' ? `<button class="row-del-btn" style="font-size:10px;padding:3px 8px" onclick="queueRemove('${item.qid}');queueUpdateUI()">✕</button>` : ''}
-    </div>`;
-  }).join('');
-}
-
-let _queueProcessing = false;
-
-async function processQueue() {
-  if (_queueProcessing || !sbUser) return;
-  _queueProcessing = true;
-  const pending = queueRead().filter(i => i.status === 'queued' || i.status === 'failed');
-  if (!pending.length) { _queueProcessing = false; return; }
-
-  showToast(`↑ Mengirim ${pending.length} item antrian...`, 5000);
-  setSyncState('syncing');
-  let ok = 0, fail = 0;
-
-  for (const item of pending) {
-    try {
-      if (item.action === 'saveRisk') {
-        await SB.upsert('risks', item.risk);
-      } else if (item.action === 'deleteRisk') {
-        await SB.delete('risks', `id=eq.${encodeURIComponent(item.riskId)}&pkg_id=eq.${encodeURIComponent(item.pkgId)}`);
-      }
-      const all = queueRead(); const f = all.find(i=>i.qid===item.qid);
-      if (f) { f.status='done'; queueWrite(all); }
-      ok++;
-    } catch(e) {
-      const all = queueRead(); const f = all.find(i=>i.qid===item.qid);
-      if (f) { f.status='failed'; f.retries=(f.retries||0)+1; queueWrite(all); }
-      fail++;
-    }
-    await new Promise(r => setTimeout(r, 300));
-  }
-
-  queueWrite(queueRead().filter(i => i.status !== 'done'));
-  _queueProcessing = false;
-
-  if (fail === 0) { setSyncState('synced'); showToast(`✅ ${ok} item antrian terkirim`); }
-  else { setSyncState('unsynced'); showToast(`⚠️ ${ok} berhasil, ${fail} gagal`, 4000); }
-  queueUpdateUI();
-}
-
-setInterval(async () => {
-  if (!sbUser || _queueProcessing) return;
-  const pending = queueRead().filter(i => i.status === 'queued' || i.status === 'failed');
-  if (pending.length > 0) processQueue();
-}, 60000);
-
-// ─── Cache lokal ────────────────────────────────────
 function cacheLocalData() {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({
@@ -2280,24 +2110,8 @@ function loadCachedData() {
   } catch(e) { return false; }
 }
 
-// ─── Online/offline events ───────────────────────────
-window.addEventListener('online', async () => {
-  showToast('🌐 Koneksi kembali! Memproses antrian...', 3000);
-  if (sbUser) processQueue();
-});
-window.addEventListener('offline', () => {
-  showToast('📡 Koneksi terputus — data tersimpan di antrian offline', 4000);
-  setSyncState('unsynced');
-});
-
-// Init queue UI
-(function() {
-  queueUpdateUI();
-  setTimeout(async () => {
-    const pending = queueRead().filter(i => i.status === 'queued' || i.status === 'failed');
-    if (pending.length > 0 && sbUser) processQueue();
-  }, 3000);
-})();
+// Hapus antrian offline lama dari sesi sebelumnya (sudah tidak dipakai)
+localStorage.removeItem('manrisk-queue-sb');
 
 let PAGU = parseFloat(localStorage.getItem('manrisk-pagu')) || 10420565000;
 
@@ -2520,249 +2334,15 @@ function showPage(id) {
   if(id==='backup') initBackupPage();
 }
 
-//  BACKUP PAGE ENGINE (V5)
 
-// ── Cek status backup dari Apps Script ───────
-async function checkBackupStatus() {
-  if (!SUPABASE_URL || SUPABASE_URL.includes('ISIAN')) {
-    showToast('⚠️ Isi GS_SCRIPT_URL dulu di konfigurasi', 3000);
-    return;
-  }
-  const btn = document.getElementById('btn-backup-status');
-  if (btn) { btn.textContent = '⏳ Mengecek...'; btn.disabled = true; }
+// ── Backup page: semua fungsi mengarah ke audit log Supabase ──
+function checkBackupStatus()  { loadAuditLog(); }
+function loadBackupList()      { loadAuditLog(); }
+function backupNow()           { showToast('ℹ️ Supabase melakukan backup otomatis harian', 4000); }
+function confirmRestore()      { showToast('ℹ️ Restore data dilakukan langsung dari Supabase dashboard', 4000); }
+function prefillRestore()      {}
 
-  const result = await gsGet({ action: 'backupStatus' });
 
-  if (btn) { btn.textContent = '🔄 Refresh Status'; btn.disabled = false; }
-
-  if (!result.ok) {
-    showToast('❌ Gagal cek status: ' + (result.msg||'error'), 3500);
-    return;
-  }
-
-  // Update stat cards
-  const trigEl    = document.getElementById('bs-trigger');
-  const trigSub   = document.getElementById('bs-trigger-sub');
-  const sheetEl   = document.getElementById('bs-last-sheet');
-  const sheetSub  = document.getElementById('bs-sheet-count');
-  const driveEl   = document.getElementById('bs-last-drive');
-  const driveSub  = document.getElementById('bs-drive-count');
-  const retainEl  = document.getElementById('bs-retain');
-
-  if (trigEl)   trigEl.textContent   = result.triggerActive ? '✅ Aktif' : '❌ Tidak Aktif';
-  if (trigSub)  trigSub.textContent  = result.triggerActive ? 'Berjalan setiap jam 01:00' : 'Jalankan setupTrigger() di editor';
-  if (sheetEl)  sheetEl.textContent  = result.lastSheetBackup ? result.lastSheetBackup.replace('Backup_','') : 'Belum ada';
-  if (sheetSub) sheetSub.textContent = (result.sheetCount||0) + ' backup tersedia';
-  if (driveEl)  driveEl.textContent  = result.lastDriveBackup || 'Belum ada';
-  if (driveSub) driveSub.textContent = (result.driveCount||0) + ' file di Drive';
-  if (retainEl) retainEl.textContent = (result.retainDays||30) + ' hari';
-
-  // Warna trigger card
-  const trigCard = trigEl?.closest('.stat-card');
-  if (trigCard) {
-    trigCard.className = 'stat-card ' + (result.triggerActive ? 'teal' : 'red');
-  }
-}
-
-// ── Muat daftar riwayat backup ────────────────
-async function loadBackupList() {
-  if (!SUPABASE_URL || SUPABASE_URL.includes('ISIAN')) {
-    showToast('⚠️ Isi GS_SCRIPT_URL dulu', 3000);
-    return;
-  }
-  const wrap = document.getElementById('backup-list-wrap');
-  if (wrap) wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-sub)">⏳ Memuat daftar backup...</div>';
-
-  const result = await gsGet({ action: 'listBackups' });
-
-  if (!result.ok || !wrap) {
-    if (wrap) wrap.innerHTML = '<div style="padding:20px;text-align:center;color:#f87171">❌ Gagal memuat: ' + (result.msg||'error') + '</div>';
-    return;
-  }
-
-  if (result.count === 0) {
-    wrap.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-sub);font-size:13px">📭 Belum ada backup. Klik "Backup Sekarang" untuk membuat backup pertama.</div>';
-    return;
-  }
-
-  // Group by date
-  const byDate = {};
-  (result.backups||[]).forEach(b => {
-    const d = b.date || '?';
-    if (!byDate[d]) byDate[d] = [];
-    byDate[d].push(b);
-  });
-
-  const rows = Object.entries(byDate)
-    .sort(([a],[b]) => b.localeCompare(a))
-    .map(([date, items]) => {
-      const sheetItem = items.find(i => i.type === 'sheet');
-      const driveItem = items.find(i => i.type === 'drive');
-      const layer1 = sheetItem
-        ? `<span style="color:#4caf50;font-weight:700">✓ ${sheetItem.name}</span> <span style="color:var(--text-sub)">(${sheetItem.rows} baris)</span>`
-        : '<span style="color:#f87171">✗ tidak ada</span>';
-      const layer2 = driveItem
-        ? `<span style="color:#4caf50;font-weight:700">✓ ${driveItem.size}</span> <a href="${driveItem.url}" target="_blank" style="color:var(--accent2);text-decoration:none;font-size:10px">↗ Buka</a>`
-        : '<span style="color:#f87171">✗ tidak ada</span>';
-      return `
-        <tr>
-          <td style="font-weight:700;color:var(--text)">${date}</td>
-          <td>${layer1}</td>
-          <td>${layer2}</td>
-          <td>
-            ${sheetItem ? `<button class="row-del-btn" style="background:rgba(0,207,255,0.1);color:var(--accent2);border-color:var(--accent2);font-size:10px;padding:3px 9px"
-              onclick="prefillRestore('${sheetItem.name}')">↩ Restore</button>` : '–'}
-          </td>
-        </tr>`;
-    }).join('');
-
-  wrap.innerHTML = `
-    <div style="overflow-x:auto">
-      <table class="risk-table" style="width:100%">
-        <thead>
-          <tr>
-            <th>Tanggal</th>
-            <th>Layer 1 — Sheet Tab</th>
-            <th>Layer 2 — Google Drive</th>
-            <th>Aksi</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div style="font-size:11px;color:var(--text-sub);margin-top:10px;padding:0 4px">
-      Total: ${result.count} backup · Retensi otomatis ${result.backups?.[0] ? BACKUP_RETAIN_DAYS_DISPLAY : 30} hari
-    </div>`;
-}
-
-// ── Backup sekarang (manual) ──────────────────
-async function backupNow() {
-  if (!SUPABASE_URL || SUPABASE_URL.includes('ISIAN')) {
-    showToast('⚠️ Isi GS_SCRIPT_URL dulu di konfigurasi', 3000);
-    return;
-  }
-  if (!sbUser) {
-    showToast('⚠️ Login Google dulu sebelum backup', 3000);
-    return;
-  }
-
-  const btn = document.getElementById('btn-backup-now');
-  const box = document.getElementById('backup-result-box');
-  if (btn) { btn.textContent = '⏳ Memproses...'; btn.disabled = true; }
-  if (box) { box.style.display = 'none'; }
-
-  showToast('💾 Backup sedang diproses...', 8000);
-
-  const result = await gsPostAndWait({
-    action: 'manualBackup',
-    user:   sbUser.displayName || sbUser.name,
-    email:  sbUser.email,
-  });
-
-  if (btn) { btn.textContent = '💾 Backup Sekarang'; btn.disabled = false; }
-
-  if (result.ok !== undefined) {
-    // Got a real response
-    const ok = result.ok;
-    if (box) {
-      box.style.display = 'block';
-      box.style.background = ok ? 'rgba(0,200,83,0.08)' : 'rgba(220,38,38,0.08)';
-      box.style.border = '1.5px solid ' + (ok ? '#006630' : '#880000');
-      box.innerHTML = ok
-        ? `<strong style="color:#4caf50">✅ Backup berhasil!</strong><br>
-           📋 Sheet: <code>${result.sheetName||'–'}</code><br>
-           ☁️ Drive: <code>${result.driveResult?.fileName||'–'}</code><br>
-           📊 Jumlah data: ${result.rowCount||0} baris<br>
-           📧 Notifikasi email dikirim ke: ${BACKUP_EMAIL_DISPLAY}`
-        : `<strong style="color:#f87171">⚠️ Backup sebagian berhasil</strong><br>
-           Error: ${result.error||result.msg||'unknown'}<br>
-           Sheet: ${result.sheetName||'–'} · Drive: ${result.driveResult?.fileName||'–'}`;
-    }
-    showToast(ok ? '✅ Backup selesai!' : '⚠️ Backup selesai dengan error', 3000);
-    // Refresh list dan status
-    setTimeout(() => { loadBackupList(); checkBackupStatus(); }, 1000);
-  } else {
-    // gsPost tidak return body (no-cors mode) — anggap berhasil
-    if (box) {
-      box.style.display = 'block';
-      box.style.background = 'rgba(255,171,64,0.08)';
-      box.style.border = '1.5px solid #804000';
-      box.innerHTML = `<strong style="color:var(--accent3)">📦 Request backup dikirim ke Apps Script</strong><br>
-        Karena mode no-cors, konfirmasi sukses tidak bisa diterima langsung.<br>
-        Tunggu beberapa detik lalu klik <strong>Refresh Status</strong> untuk verifikasi.`;
-    }
-    showToast('📦 Request backup terkirim — refresh status untuk konfirmasi', 4000);
-    setTimeout(() => { checkBackupStatus(); loadBackupList(); }, 4000);
-  }
-}
-
-// ── Wrapper POST yang mencoba dapat response ──
-async function gsPostAndWait(payload) {
-  if (!GS_SCRIPT_URL) return { ok: false, msg: 'URL belum diisi' };
-  try {
-    // Coba fetch biasa dulu (jika CORS diizinkan)
-    const res = await fetch(GS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'payload=' + encodeURIComponent(JSON.stringify(payload)),
-      redirect: 'follow',
-    });
-    if (res.ok) {
-      const text = await res.text();
-      try { return JSON.parse(text); } catch(e) { return { ok: true }; }
-    }
-  } catch(e) {
-    // CORS blocked — fallback ke no-cors iframe
-  }
-  // Fallback: kirim via iframe (no-cors), tidak ada response body
-  await gsPost(payload);
-  return {};
-}
-
-// ── Isi field restore dari klik tabel ────────
-function prefillRestore(backupName) {
-  const el = document.getElementById('restore-name');
-  if (el) { el.value = backupName; el.focus(); }
-  showToast('💡 Nama backup sudah diisi — klik Restore untuk melanjutkan', 3000);
-}
-
-// ── Konfirmasi dan eksekusi restore ──────────
-async function confirmRestore() {
-  const nameEl = document.getElementById('restore-name');
-  const name   = nameEl ? nameEl.value.trim() : '';
-  if (!name) { showToast('⚠️ Isi nama sheet backup dulu', 2500); return; }
-  if (!SUPABASE_URL || SUPABASE_URL.includes('ISIAN')) { showToast('⚠️ GS_SCRIPT_URL belum diisi', 2500); return; }
-  if (!sbUser)         { showToast('⚠️ Login dulu', 2500); return; }
-
-  const confirmed = confirm(
-    `⚠️ KONFIRMASI RESTORE\n\nAnda akan menimpa SELURUH data sheet Risks dengan:\n→ ${name}\n\nSebelum restore, snapshot otomatis akan dibuat sebagai cadangan.\n\nLanjutkan?`
-  );
-  if (!confirmed) return;
-
-  const resEl = document.getElementById('restore-result');
-  if (resEl) { resEl.style.display = 'block'; resEl.textContent = '⏳ Memproses restore...'; }
-
-  const result = await gsPostAndWait({
-    action:     'restoreBackup',
-    backupName: name,
-    user:       sbUser.displayName || sbUser.name,
-    email:      sbUser.email,
-  });
-
-  if (resEl) {
-    if (result.ok) {
-      resEl.style.color    = '#4caf50';
-      resEl.innerHTML = `✅ Restore berhasil dari <strong>${result.restoredFrom}</strong> — ${result.rows} baris dipulihkan.<br>
-        Klik <strong>☁️ Load dari Sheets</strong> di topbar untuk memuat data terbaru ke tampilan.`;
-    } else if (result.ok === false) {
-      resEl.style.color = '#f87171';
-      resEl.textContent = '❌ Gagal: ' + (result.msg||'error tidak diketahui');
-    } else {
-      resEl.style.color = 'var(--accent3)';
-      resEl.textContent = '📦 Request restore dikirim. Load ulang data dari Sheets untuk konfirmasi.';
-    }
-  }
-}
 
 // ── Init halaman backup ───────────────────────
 function initBackupPage() {
@@ -2775,9 +2355,7 @@ function initBackupPage() {
 }
 initBackupPage._done = false;
 
-// Konstanta display (dari Apps Script config — untuk info UI)
-const BACKUP_RETAIN_DAYS_DISPLAY = 30;
-const BACKUP_EMAIL_DISPLAY       = '(email yang dikonfigurasi di Apps Script)';
+
 
 function showPkg(pkgId) {
   // make sure page exists
@@ -3480,7 +3058,7 @@ init();
   <div class="del-box">
     <div class="del-icon">🗑️</div>
     <div class="del-title" id="del-title">Hapus Risiko?</div>
-    <div class="del-sub" id="del-sub">Data ini akan dihapus permanen dari aplikasi dan Google Spreadsheet. Tindakan ini tidak bisa dibatalkan.</div>
+    <div class="del-sub" id="del-sub">Data ini akan dihapus permanen dari aplikasi dan Supabase. Tindakan ini tidak bisa dibatalkan.</div>
     <div class="del-actions">
       <button onclick="cancelDelete()"
         style="flex:1;padding:10px 20px;border-radius:8px;border:1px solid var(--border-lt);background:rgba(255,255,255,0.06);color:var(--slate);cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif">
@@ -3817,31 +3395,6 @@ init();
 </div>
 
 <!-- ══════ OFFLINE QUEUE MODAL ══════ -->
-<div class="modal-overlay" id="queue-modal" onclick="if(event.target===this)closeModal('queue-modal')">
-  <div class="modal" style="width:min(560px,94vw)">
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">📦 Antrian Offline</div>
-        <div style="font-size:11px;color:var(--text-sub);margin-top:2px">Data yang belum terkirim ke Google Sheets</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="topbar-action btn-primary" style="font-size:11px;padding:6px 12px"
-          onclick="processQueue()">↑ Kirim Semua</button>
-        <button class="modal-close" onclick="closeModal('queue-modal')">✕</button>
-      </div>
-    </div>
-    <div class="modal-body" style="padding:16px 20px">
-      <div class="infobox gold" style="margin-bottom:14px">
-        <span class="infobox-icon">ℹ️</span>
-        <div>Data di antrian ini tersimpan aman di browser Anda. Saat koneksi kembali, klik <strong>"Kirim Semua"</strong> atau tunggu pengiriman otomatis.</div>
-      </div>
-      <div id="queue-list"></div>
-      <div id="queue-empty" style="text-align:center;padding:24px;color:var(--text-sub);font-size:13px;display:none">
-        ✅ Tidak ada data tertahan — semua sudah terkirim!
-      </div>
-    </div>
-  </div>
-</div>
 
 <div class="save-toast" id="save-toast">✅ Data berhasil disimpan!</div>
 
@@ -4036,7 +3589,7 @@ function markUnsaved() {
 window.addEventListener('beforeunload', (e) => {
   if(_unsavedChanges) {
     e.preventDefault();
-    e.returnValue = 'Ada perubahan yang belum disimpan ke Google Sheets. Yakin mau keluar?';
+    e.returnValue = 'Ada perubahan yang belum disimpan ke Supabase. Yakin mau keluar?';
     return e.returnValue;
   }
 });
@@ -4051,7 +3604,7 @@ function confirmDelete(pkgId, rIdx, riskId) {
   const r = packages[pkgId]?.risks[rIdx];
   document.getElementById('del-title').textContent = 'Hapus ' + riskId + '?';
   document.getElementById('del-sub').textContent   =
-    '"' + (r?.aktivitas || riskId) + '" akan dihapus permanen dari aplikasi dan Google Spreadsheet.';
+    '"' + (r?.aktivitas || riskId) + '" akan dihapus permanen dari aplikasi dan Supabase.';
   document.getElementById('del-overlay').classList.add('open');
 }
 
@@ -4060,39 +3613,6 @@ function cancelDelete() {
   _delPkgId = _delRiskIdx = _delRiskId = null;
 }
 
-async function doDelete() {
-  if (_delPkgId === null || _delRiskIdx === null) return;
-  document.getElementById('del-overlay').classList.remove('open');
-
-  // Hapus dari data lokal
-  packages[_delPkgId].risks.splice(_delRiskIdx, 1);
-
-  // Hapus dari Google Sheets
-  if (sbUser && GS_SCRIPT_URL) {
-    await gsPost({
-      action:  'deleteRisk',
-      pkgId:   _delPkgId,
-      riskId:  _delRiskId,
-      user:    sbUser.displayName || sbUser.name,
-      email:   sbUser.email
-    });
-  }
-
-  buildPkgNav();
-  // Re-render tab yang sedang aktif
-  const tabIdx = currentTab[_delPkgId] || 0;
-  const existing = document.getElementById('page-' + _delPkgId);
-  if (existing) { existing.remove(); }
-  buildPkgPage(_delPkgId);
-  showPkg(_delPkgId);
-  // Switch ke tab yang sama
-  setTimeout(() => switchTab(_delPkgId, tabIdx), 50);
-
-  if (currentPage === 'dashboard') renderDashboard();
-  markUnsaved();
-  showToast('🗑 Risiko ' + _delRiskId + ' berhasil dihapus');
-  _delPkgId = _delRiskIdx = _delRiskId = null;
-}
 
 // ══ LIGHT / DARK MODE TOGGLE ════════════════════════════
 function toggleTheme() {
