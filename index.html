@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V5-15 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-16 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
@@ -1420,12 +1420,12 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-15 (2026-06-12)
-//  CHANGES: auto-load fix (await + setTimeout 200ms di restoreSession)
-//  CHANGES: tombol LOGIN (ganti "Login Google")
-//  CHANGES: hapus "⚠ Belum disimpan", auto-save tiap perubahan, toast "Data tersimpan"
-//  CHANGES: Print & Word per tab aktif (Identifikasi/Analisa/Evaluasi/Pengendalian/Residual/Matrik)
-//  CHANGES: Print buka jendela baru dengan layout A4 landscape, warna terjaga
+//  VERSI: v5-16 (2026-06-12)
+//  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
+//           sebelum data selesai dimuat (skipSync=true pada semua jalur login)
+//  CHANGES: warna matrik Word & Print pakai inline style (bukan CSS class)
+//           sehingga warna tampil di Microsoft Word dan browser print
+//  CHANGES: versi dicatat di dalam kode HTML (title + comment JS)
 
 //  KONFIGURASI SUPABASE
 //  Ganti dua nilai di bawah dengan data dari project Supabase Anda
@@ -1716,7 +1716,7 @@ async function gsDoLogin() {
     localStorage.setItem('sbUser', JSON.stringify(sbUser));
 
     closeModal('gs-login-modal');
-    gsUpdateUI(true);
+    gsUpdateUI(true, true);
     showToast('✅ Login sebagai ' + sbUser.displayName + ' — memuat data...');
     await sbLoadAll();
   } catch(e) {
@@ -1769,7 +1769,7 @@ async function gsDoSignup() {
     localStorage.setItem('sbUser', JSON.stringify(sbUser));
 
     closeModal('gs-login-modal');
-    gsUpdateUI(true);
+    gsUpdateUI(true, true);
     showToast('🎉 Akun dibuat! Login sebagai ' + sbUser.displayName + ' — memuat data...');
     await sbLoadAll();
   } catch(e) {
@@ -1815,7 +1815,7 @@ function gsRestoreSession() {
         SBAuth.refreshToken(_sbSession.refresh_token).then(async d => {
           _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
           localStorage.setItem('sbSession', JSON.stringify(_sbSession));
-          gsUpdateUI(true);
+          gsUpdateUI(true, true);
           await sbLoadAll();
         }).catch(() => {
           _sbSession = null; sbUser = null;
@@ -1823,7 +1823,7 @@ function gsRestoreSession() {
           gsUpdateUI(false);
         });
       } else {
-        gsUpdateUI(true);
+        gsUpdateUI(true, true);
         // Delay sedikit agar DOM siap, lalu load otomatis
         setTimeout(() => sbLoadAll(), 200);
       }
@@ -1833,7 +1833,7 @@ function gsRestoreSession() {
   }
 }
 
-function gsUpdateUI(loggedIn) {
+function gsUpdateUI(loggedIn, skipSync) {
   const dot   = document.getElementById('gs-dot');
   const name  = document.getElementById('gs-user-name');
   const btnL  = document.getElementById('btn-gs-login');
@@ -1848,7 +1848,8 @@ function gsUpdateUI(loggedIn) {
     btnS.style.display   = '';
     btnLd.style.display  = '';
     if (btnLo) btnLo.style.display = '';
-    setSyncState('unsynced');
+    // Jangan trigger unsynced/auto-save saat pertama login — tunggu setelah load selesai
+    if (!skipSync) setSyncState('synced');
   } else {
     dot.style.background = 'var(--slate)';
     name.textContent     = 'Belum login';
@@ -3710,6 +3711,13 @@ function doPrint() {
   function lvlClass(b) { return b<=5?'sr':b<=10?'r':b<=15?'s':b<=19?'t':'st'; }
   function lvlLabel(b) { return b<=5?'Sangat Rendah':b<=10?'Rendah':b<=15?'Sedang':b<=19?'Tinggi':'Sangat Tinggi'; }
   function mcColor(b)  { return b<=5?'mc-sr':b<=10?'mc-r':b<=15?'mc-s':b<=19?'mc-t':'mc-st'; }
+  function mcStyle(b)  {
+    if(b<=5)  return 'background:#86efac;color:#14532d;';
+    if(b<=10) return 'background:#22c55e;color:#052e16;';
+    if(b<=15) return 'background:#facc15;color:#713f12;';
+    if(b<=19) return 'background:#f97316;color:#431407;';
+    return 'background:#ef4444;color:#450a0a;';
+  }
   function appr(v)     { return v ? '<b style="color:#155724">✓ Approved</b>' : '<span style="color:#888">— Belum</span>'; }
   function esc(s)      { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
 
@@ -3805,7 +3813,7 @@ function doPrint() {
     function bTable(grid,title){ const hc=DL.map(d=>`<th style="font-size:7pt">${d}</th>`).join('');
       const br=PL.map((pl,ri)=>{ const cells=[0,1,2,3,4].map(ci=>{
         const b=(5-ri)*(ci+1),codes=grid[ri][ci];
-        return `<td class="mx-c ${mcColor(b)}">${codes.length?codes.join('<br>'):b}</td>`;
+        return `<td class="mx-c" style="border:1px solid #bbb;text-align:center;padding:3px;font-size:7.5pt;font-weight:bold;width:80px;height:36px;${mcStyle(b)}">${codes.length?codes.join('<br>'):b}</td>`;
       }).join(''); return `<tr><td class="rh">${pl}</td>${cells}</tr>`; }).join('');
       return `<p style="font-weight:bold;font-size:8.5pt;margin:8px 0 3px">${title}</p>
         <table class="mx-table"><thead><tr><th style="white-space:nowrap">K ↓ / D →</th>${hc}</tr></thead><tbody>${br}</tbody></table>`; }
@@ -3890,6 +3898,13 @@ function exportWord() {
   function lvlClass(b) { return b<=5?'sr':b<=10?'r':b<=15?'s':b<=19?'t':'st'; }
   function lvlLabel(b) { return b<=5?'Sangat Rendah':b<=10?'Rendah':b<=15?'Sedang':b<=19?'Tinggi':'Sangat Tinggi'; }
   function mcColor(b)  { return b<=5?'mc-sr':b<=10?'mc-r':b<=15?'mc-s':b<=19?'mc-t':'mc-st'; }
+  function mcStyle(b)  {
+    if(b<=5)  return 'background:#86efac;color:#14532d;';
+    if(b<=10) return 'background:#22c55e;color:#052e16;';
+    if(b<=15) return 'background:#facc15;color:#713f12;';
+    if(b<=19) return 'background:#f97316;color:#431407;';
+    return 'background:#ef4444;color:#450a0a;';
+  }
   function appr(v)     { return v ? '<span class="ya">✓ Approved</span>' : '<span class="blm">— Belum</span>'; }
   function esc(s)      { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
 
@@ -4017,7 +4032,7 @@ function exportWord() {
           const b = (5-ri)*(ci+1);
           const codes = grid[ri][ci];
           const content = codes.length ? codes.join('<br>') : b;
-          return `<td class="mx-c ${mcColor(b)}" style="width:80px;height:36px">${content}</td>`;
+          return `<td style="border:1px solid #bbb;text-align:center;padding:3px;font-size:7.5pt;font-weight:bold;width:80px;height:36px;${mcStyle(b)}">${content}</td>`;
         }).join('');
         return `<tr><td class="rh">${pl}</td>${cells}</tr>`;
       }).join('');
