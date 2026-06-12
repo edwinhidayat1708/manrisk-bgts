@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V5-12 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-13 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
@@ -1017,22 +1017,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     <div class="section-sub">Ringkasan manajemen risiko seluruh paket kegiatan BGTS</div>
 
     <!-- Banner: hanya tampil jika belum login -->
-    <div id="dash-login-banner" style="display:none;margin-bottom:24px">
-      <div style="background:rgba(0,216,255,0.06);border:2px solid rgba(0,216,255,0.2);border-radius:var(--radius);padding:32px;text-align:center">
-        <div style="font-size:48px;margin-bottom:12px">🔒</div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#fff;margin-bottom:8px">Data Risiko Bersifat Rahasia</div>
-        <div style="font-size:13px;color:var(--text-sub);line-height:1.8;margin-bottom:20px;max-width:480px;margin-left:auto;margin-right:auto">
-          Paket kegiatan dan data risiko ManRisk BGTS hanya dapat diakses oleh pengguna yang telah terdaftar dan login.<br>
-          Silakan login atau daftar akun baru untuk melihat data.
-        </div>
-        <button onclick="gsLogin()" style="padding:12px 32px;background:var(--accent);color:#000;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-right:10px">
-          🔑 Login
-        </button>
-        <button onclick="gsShowAuthTab('signup');showModal('gs-login-modal')" style="padding:12px 32px;background:var(--accent3);color:#000;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">
-          📝 Daftar Akun
-        </button>
-      </div>
-    </div>
+    <div id="dash-login-banner" style="display:none"></div>
 
     <!-- Data wrap: hanya tampil jika sudah login -->
     <div id="dash-data-wrap">
@@ -1435,11 +1420,11 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-12 (2026-06-12)
-//  CHANGES: konfirmasi email saat registrasi (modal + spam warning)
-//  CHANGES: dashboard di-gate — data tersembunyi sebelum login
-//  CHANGES: export Word (.doc) langsung dari browser
-//  CHANGES: presence indicator "sedang diedit oleh..." multi-user
+//  VERSI: v5-13 (2026-06-12)
+//  CHANGES: hapus banner "Data Risiko Bersifat Rahasia" dari dashboard
+//  CHANGES: auto-load data setelah login, toast lebih informatif
+//  CHANGES: logout membersihkan semua data & cache, reset ke tampilan kosong
+//  CHANGES: validasi SEMUA field wajib diisi sebelum simpan risiko
 
 //  KONFIGURASI SUPABASE
 //  Ganti dua nilai di bawah dengan data dari project Supabase Anda
@@ -1801,8 +1786,20 @@ async function gsLogout() {
   }
   sbUser = null;
   localStorage.removeItem('sbUser');
+
+  // Kosongkan semua data packages agar tidak bisa dilihat setelah logout
+  Object.keys(packages).forEach(k => delete packages[k]);
+  localStorage.removeItem('manrisk-data-cache-v5'); // hapus cache lokal
+
+  // Reset UI
   gsUpdateUI(false);
-  showToast('👋 Logout berhasil');
+  buildPkgNav();
+  renderDashboard();
+
+  // Kembali ke halaman dashboard (kosong)
+  showPage('dashboard');
+
+  showToast('👋 Logout berhasil — data telah dibersihkan');
 }
 
 // Restore session dari localStorage saat halaman dimuat
@@ -1897,7 +1894,7 @@ async function sbLoadAll() {
     if (currentPage && packages[currentPage]) renderPkgTab(currentPage, currentTab[currentPage]||0);
 
     setSyncState('synced');
-    showToast('⬇️ ' + riskRows.length + ' risiko dimuat dari Supabase');
+    showToast('⬇️ ' + riskRows.length + ' risiko berhasil dimuat dari Supabase — data siap digunakan');
   } catch(e) {
     setSyncState('unsynced');
     showToast('❌ Gagal muat: ' + e.message, 5000);
@@ -2980,32 +2977,75 @@ function doAddRisk() {
     luaran:          document.getElementById('ar-luaran').value.trim(),
     appr_res:        false
   };
-  // Validasi field wajib
+  // ── Validasi SEMUA field wajib ───────────────────────
+  const allRequired = [
+    // [field_id, nilai_di_r, label_tampil]
+    ['ar-id',               r.id,               'Kode Risiko'],
+    ['ar-aktivitas',        r.aktivitas,         'Aktivitas'],
+    ['ar-tujuan',           r.tujuan,            'Tujuan Kegiatan'],
+    ['ar-pernyataan',       r.pernyataan,        'Pernyataan Risiko'],
+    ['ar-penyebab',         r.penyebab,          'Penyebab Risiko'],
+    ['ar-dampak',           r.dampak,            'Dampak Risiko'],
+    ['ar-pengendalian-ada', r.pengendalian_ada,  'Pengendalian yang Ada'],
+    ['ar-analisis-k',       r.analisis_k,        'Analisis Nilai K'],
+    ['ar-analisis-d',       r.analisis_d,        'Analisis Nilai D'],
+    ['ar-finbench',         r.fin_bench > 0 ? '1' : '', 'Financial Benchmark'],
+    ['ar-rtp',              r.rtp,               'RTP (Rencana Tindak Pengendalian)'],
+    ['ar-sumber',           r.sumber,            'Sumber Daya'],
+    ['ar-analisis-k-res',   r.analisis_k_res,    'Analisis K Residual'],
+    ['ar-analisis-d-res',   r.analisis_d_res,    'Analisis D Residual'],
+    ['ar-pj',               document.getElementById('ar-pj').value.trim(), 'Penanggung Jawab RTP'],
+    ['ar-target',           document.getElementById('ar-target').value.trim(), 'Target Waktu'],
+    ['ar-luaran',           r.luaran,            'Luaran / Output RTP'],
+  ];
+
   const valErrors = [];
-  const clearErr = (id) => { const el=document.getElementById(id); if(el){el.classList.remove('invalid','valid');} };
-  const markErr  = (id, msg) => {
+  allRequired.forEach(([id, val, label]) => {
     const el = document.getElementById(id);
-    if(el){ el.classList.add('invalid'); el.classList.remove('valid');
-      el.focus(); valErrors.push(msg); }
-  };
-  const markOk = (id) => { const el=document.getElementById(id); if(el){ el.classList.add('valid'); el.classList.remove('invalid'); } };
+    if (!val || String(val).trim() === '') {
+      if (el) el.classList.add('invalid');
+      valErrors.push(label);
+    } else {
+      if (el) { el.classList.remove('invalid'); el.classList.add('valid'); }
+    }
+  });
 
-  ['ar-id','ar-aktivitas','ar-pernyataan','ar-finbench'].forEach(clearErr);
+  // Cek kategori dipilih
+  const katVal = getSelectedKat();
+  if (!katVal || katVal === 'Risiko Kinerja' && document.querySelectorAll('#ar-kat-chips .kat-chip.selected').length === 0) {
+    valErrors.push('Kategori Risiko');
+  }
 
-  if(!r.id)          markErr('ar-id',         'Kode Risiko wajib diisi');
-  else               markOk('ar-id');
-  if(!r.aktivitas)   markErr('ar-aktivitas',   'Aktivitas wajib diisi');
-  else               markOk('ar-aktivitas');
-  if(!r.pernyataan)  markErr('ar-pernyataan',  'Pernyataan Risiko wajib diisi');
-  else               markOk('ar-pernyataan');
-  if(!r.fin_bench||r.fin_bench<=0) markErr('ar-finbench','Financial Benchmark harus diisi');
-  else               markOk('ar-finbench');
+  // Cek respon dipilih
+  if (!r.respon) {
+    const el = document.getElementById('ar-respon');
+    if (el) el.classList.add('invalid');
+    valErrors.push('Respon Risiko');
+  }
+
   // Cek duplikat kode
-  const isDup = packages[pkgId]?.risks.some(x=>x.id===r.id);
-  if(isDup) { markErr('ar-id','Kode sudah ada di paket ini'); }
+  const isDup = packages[pkgId]?.risks.some(x => x.id === r.id);
+  if (isDup) {
+    const el = document.getElementById('ar-id');
+    if (el) el.classList.add('invalid');
+    valErrors.push('Kode Risiko sudah ada di paket ini');
+  }
 
-  if(valErrors.length>0) {
-    showToast('⚠️ ' + valErrors[0], 4000);
+  if (valErrors.length > 0) {
+    const kosong = valErrors.filter(v => !v.includes('sudah ada'));
+    const dupErr = valErrors.filter(v => v.includes('sudah ada'));
+    let msg = '';
+    if (kosong.length > 0) {
+      msg += `⚠️ Harap lengkapi semua isian terlebih dahulu sebelum menyimpan.\n\nKolom yang belum diisi (${kosong.length}):\n• ` + kosong.join('\n• ');
+    }
+    if (dupErr.length > 0) {
+      msg += (msg ? '\n\n' : '') + '❌ ' + dupErr[0];
+    }
+    // Tampilkan alert yang informatif
+    alert(msg);
+    // Scroll ke field pertama yang error
+    const firstErr = document.querySelector('#add-risk-modal .invalid');
+    if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
   packages[pkgId].risks.push(r);
