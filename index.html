@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V5-11 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-12 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
@@ -979,7 +979,8 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
       <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()"></button>
       <span id="theme-icon-light" style="font-size:13px">☀️</span>
     </div>
-    <button class="topbar-action" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.25);font-weight:700;font-size:12px" onclick="doPrint()">🖨 Print/PDF</button>
+    <button class="topbar-action" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.25);font-weight:700;font-size:12px" onclick="doPrint()">🖨 Print</button>
+    <button class="topbar-action" style="background:rgba(37,99,235,0.15);color:#93c5fd;border:1px solid rgba(37,99,235,0.25);font-weight:700;font-size:12px" onclick="exportWord()" title="Export ke Word — bisa dibuka di Microsoft Word, crop/paste ke laporan">📄 Word</button>
     <div id="sync-indicator" class="offline" title="Status sinkronisasi dengan Supabase">
       <div id="sync-dot"></div>
       <span id="sync-label">Offline</span>
@@ -1015,31 +1016,52 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     <div class="section-heading">Overview Risiko BGTS 2026</div>
     <div class="section-sub">Ringkasan manajemen risiko seluruh paket kegiatan BGTS</div>
 
-    <div class="stat-grid" id="stat-grid"></div>
-
-    <div class="dash-grid">
-      <div class="card">
-        <div class="card-head"><div class="card-title">📦 Ringkasan per Paket</div></div>
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr><th>Paket</th><th>Risiko</th><th>Max Bobot</th><th>Total EMV</th><th>Status</th></tr></thead>
-            <tbody id="dash-pkg-tbl"></tbody>
-          </table>
+    <!-- Banner: hanya tampil jika belum login -->
+    <div id="dash-login-banner" style="display:none;margin-bottom:24px">
+      <div style="background:rgba(0,216,255,0.06);border:2px solid rgba(0,216,255,0.2);border-radius:var(--radius);padding:32px;text-align:center">
+        <div style="font-size:48px;margin-bottom:12px">🔒</div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#fff;margin-bottom:8px">Data Risiko Bersifat Rahasia</div>
+        <div style="font-size:13px;color:var(--text-sub);line-height:1.8;margin-bottom:20px;max-width:480px;margin-left:auto;margin-right:auto">
+          Paket kegiatan dan data risiko ManRisk BGTS hanya dapat diakses oleh pengguna yang telah terdaftar dan login.<br>
+          Silakan login atau daftar akun baru untuk melihat data.
         </div>
-      </div>
-      <div class="card">
-        <div class="card-head"><div class="card-title">📈 Distribusi Bobot Risiko</div></div>
-        <div class="card-body" id="dash-dist"></div>
+        <button onclick="gsLogin()" style="padding:12px 32px;background:var(--accent);color:#000;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-right:10px">
+          🔑 Login
+        </button>
+        <button onclick="gsShowAuthTab('signup');showModal('gs-login-modal')" style="padding:12px 32px;background:var(--accent3);color:#000;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">
+          📝 Daftar Akun
+        </button>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-head"><div class="card-title">⚡ Top Risiko (Bobot Tertinggi)</div></div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>Kode</th><th>Paket</th><th>Aktivitas</th><th>Bobot K×D</th><th>Level</th><th>EMV</th><th>Residual Bobot</th></tr></thead>
-          <tbody id="dash-top-risks"></tbody>
-        </table>
+    <!-- Data wrap: hanya tampil jika sudah login -->
+    <div id="dash-data-wrap">
+      <div class="stat-grid" id="stat-grid"></div>
+
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-head"><div class="card-title">📦 Ringkasan per Paket</div></div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Paket</th><th>Risiko</th><th>Max Bobot</th><th>Total EMV</th><th>Status</th></tr></thead>
+              <tbody id="dash-pkg-tbl"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">📈 Distribusi Bobot Risiko</div></div>
+          <div class="card-body" id="dash-dist"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="card-title">⚡ Top Risiko (Bobot Tertinggi)</div></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Kode</th><th>Paket</th><th>Aktivitas</th><th>Bobot K×D</th><th>Level</th><th>EMV</th><th>Residual Bobot</th></tr></thead>
+            <tbody id="dash-top-risks"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -1413,12 +1435,11 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-11 (2026-06-11)
-//  CHANGES: fix sbLoadAll reset packages, fix nav-del-pkg visibility, validasi edit, RLS SQL
-//  CHANGES: fix auto-save bug, hapus offline queue UI, tambah hapus paket kegiatan
-//  FIX: Menambahkan <div id="pkg-pages"></div> yang hilang di v5-8
-//       sehingga halaman Identifikasi/Analisa/Evaluasi/Pengendalian/Residual/Matrik
-//       kini tampil kembali saat memilih Paket Kegiatan.
+//  VERSI: v5-12 (2026-06-12)
+//  CHANGES: konfirmasi email saat registrasi (modal + spam warning)
+//  CHANGES: dashboard di-gate — data tersembunyi sebelum login
+//  CHANGES: export Word (.doc) langsung dari browser
+//  CHANGES: presence indicator "sedang diedit oleh..." multi-user
 
 //  KONFIGURASI SUPABASE
 //  Ganti dua nilai di bawah dengan data dari project Supabase Anda
@@ -1736,8 +1757,23 @@ async function gsDoSignup() {
   btn.disabled = true; btn.textContent = '⏳ Mendaftar...';
 
   try {
-    await SBAuth.signUp(email, pass1, { name, unit: unit||'-' });
-    // Auto login setelah signup
+    const signupResp = await SBAuth.signUp(email, pass1, { name, unit: unit||'-' });
+
+    // Cek apakah Supabase memerlukan konfirmasi email
+    // Jika user belum confirmed, identities kosong atau confirmed_at null
+    const needsConfirm = !signupResp.session && (
+      !signupResp.user?.confirmed_at ||
+      (signupResp.user?.identities && signupResp.user.identities.length === 0)
+    );
+
+    if (needsConfirm) {
+      // Tampilkan pesan konfirmasi email
+      closeModal('gs-login-modal');
+      showEmailConfirmModal(email, name);
+      return;
+    }
+
+    // Jika tidak perlu konfirmasi (misal confirm disabled di Supabase)
     const d = await SBAuth.signIn(email, pass1);
     _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
     localStorage.setItem('sbSession', JSON.stringify(_sbSession));
@@ -2188,128 +2224,10 @@ function fmt(n) { return 'Rp '+Math.round(n).toLocaleString('id-ID'); }
 function fmtPct(n) { return (n*100).toFixed(3)+'%'; }
 function mcClass(n) { return `mc-${Math.min(25,Math.max(1,n))}`; }
 
-let packages = {
-  TH: {
-    id:'TH', name:'Kliring Teknologi dan Monitoring', icon:'⚙️', anggaran:226207000,
-    risks:[
-      {id:'TH-001',aktivitas:'Penerimaan usulan Kliring',tujuan:'Memastikan seluruh usulan kliring teknologi terdokumentasi',
-       pernyataan:'Potensi vendor intervensi agar usulan kliring teknologi diprioritaskan/dipercepat',
-       kategori:'Risiko Korupsi – Suap menyuap; Risiko Korupsi - Benturan kepentingan',
-       penyebab:'Hubungan vendor dengan pihak internal; Diskresi pimpinan',
-       dampak:'Penilaian teknologi menjadi tidak objektif',
-       pengendalian_ada:'SOP penerimaan usulan kliring teknologi dan pencatatan administrasi',
-       hasil:'Belum Memadai', appr_ident:true,
-       analisis_k:'Intervensi vendor dalam proses kliring teknologi relatif jarang terjadi, namun peluang tetap ada karena adanya hubungan vendor dengan pihak internal dan adanya diskresi pimpinan.',
-       prob_val:0.1, nilai_k:2,
-       analisis_d:'Dampak pada proses pengambilan keputusan dan integritas cukup terbatas, tidak berdampak langsung pada kerugian besar, kategori minor.',
-       nilai_d:3, fin_bench:226207000, appr_analisa:true,
-       respon:'1.Mengurangi Kemungkinan 2.Mengurangi Dampak', appr_eval:true,
-       jenis:'Penguatan; Pencegahan; Pendidikan',
-       rtp:'1. Menyusun mekanisme penerimaan usulan kliring berbasis sistem registrasi elektronik → usulan ke Subdit TPI.\n2. Mewajibkan pakta integritas dan deklarasi benturan kepentingan bagi pejabat yang terlibat dalam proses kliring.',
-       sumber:'Method: SOP kliring teknologi yang diperbarui. System: aplikasi registrasi usulan teknologi. Policy: kebijakan transparansi proses usulan teknologi.', appr_kend:true,
-       analisis_k_res:'Sistem registrasi elektronik + pakta integritas + COI secara signifikan menutup celah intervensi vendor → probabilitas menjadi sangat rendah',
-       prob_res:0.01, nilai_k_res:1,
-       analisis_d_res:'Dampak masih moderat jika terjadi (isu reputasi & integritas), namun lebih terkendali karena traceability sistem',
-       nilai_d_res:3, pj:'Tim Pelaksana TH', target:'12 Bulan',
-       luaran:'SOP kliring digital + pakta integritas + deklarasi COI', appr_res:true},
+let packages = {};
+// Data dimuat dari Supabase saat login — tidak ada data dummy lokal
 
-      {id:'TH-002',aktivitas:'Verifikasi dokumen',tujuan:'Memastikan dokumen teknis lengkap dan sesuai persyaratan',
-       pernyataan:'1. Dokumen tidak lengkap atau tidak valid; 2. Keterlambatan proses kliring teknologi',
-       kategori:'Risiko Kinerja; Risiko Layanan',
-       penyebab:'1. Vendor hanya menyampaikan data yang menguntungkan; 2. Prosedur administrasi panjang',
-       dampak:'Evaluasi teknologi menjadi tidak akurat; teknologi tidak dapat digunakan',
-       pengendalian_ada:'Checklist verifikasi dokumen teknis', hasil:'Belum Memadai', appr_ident:false,
-       analisis_k:'Risiko dokumen tidak lengkap atau tidak valid cukup sering terjadi karena administrasi relatif kompleks; Vendor cenderung hanya menyampaikan data yang menguntungkan mereka.',
-       prob_val:0.2, nilai_k:3,
-       analisis_d:'Ketidaklengkapan dokumen mempengaruhi kualitas evaluasi dan berpotensi menyebabkan kesalahan keputusan sehingga berdampak pada kinerja, kategori moderat.',
-       nilai_d:3, fin_bench:226207000, appr_analisa:false, respon:'', appr_eval:false,
-       jenis:'Penguatan; Pencegahan; Pendidikan',
-       rtp:'1. Mengembangkan template dokumen usulan teknologi yang lengkap dan seragam.\n2. Menyediakan bimbingan teknis kepada pengusul teknologi.',
-       sumber:'Man: tim verifikasi administrasi dan teknis → Subdit TPI. Method: standar checklist verifikasi.', appr_kend:false,
-       analisis_k_res:'Template + bimtek mengurangi kesalahan administratif, namun faktor eksternal (vendor) masih ada → probabilitas masih sedang',
-       prob_res:0.05, nilai_k_res:2,
-       analisis_d_res:'Dampak turun karena kualitas dokumen meningkat → kesalahan bisa dicegah di awal',
-       nilai_d_res:3, pj:'Tim Pelaksana TH', target:'12 Bulan',
-       luaran:'Template dokumen + checklist + materi bimtek', appr_res:false},
-
-      {id:'TH-003',aktivitas:'Diskusi kajian teknis teknologi',tujuan:'Penilaian kelayakan teknologi',
-       pernyataan:'1. Penilaian tidak objektif karena konflik kepentingan evaluator; 2. Keterbatasan kapasitas SDM evaluator dalam menilai teknologi kompleks',
-       kategori:'Risiko Korupsi – Benturan kepentingan dalam pekerjaan; Risiko Kinerja',
-       penyebab:'Evaluator memiliki hubungan profesional dengan vendor; Penilaian teknologi tidak akurat',
-       dampak:'Teknologi tidak layak dapat disetujui',
-       pengendalian_ada:'Tenaga ahli terpercaya; Internalisasi engineer', hasil:'Belum Memadai', appr_ident:false,
-       analisis_k:'Konflik kepentingan atau keterbatasan kapasitas evaluator dalam menilai teknologi baru dapat terjadi karena kompleksitas tinggi dan keahlian tertentu.',
-       prob_val:0.1, nilai_k:2,
-       analisis_d:'Usulan teknologi dapat tidak disetujui atau keputusan tidak tepat, kategori minor.',
-       nilai_d:3, fin_bench:226207000, appr_analisa:false, respon:'', appr_eval:false,
-       jenis:'Penguatan; Pencegahan; Pendidikan',
-       rtp:'1. Mewajibkan deklarasi conflict of interest bagi seluruh evaluator.\n2. Meningkatkan kapasitas evaluator melalui pelatihan atau workshop teknologi konstruksi.',
-       sumber:'Man: evaluator teknis, pakar eksternal jika diperlukan. Method: metode penilaian teknologi berbasis skor. Budget: pelatihan evaluator.', appr_kend:false,
-       analisis_k_res:'COI + peningkatan kapasitas evaluator signifikan menurunkan bias penilaian',
-       prob_res:0.01, nilai_k_res:1,
-       analisis_d_res:'Dampak tetap moderat karena kompleksitas teknologi tetap tinggi',
-       nilai_d_res:3, pj:'Tim Pelaksana TH', target:'12 Bulan',
-       luaran:'Form COI + pelatihan evaluator', appr_res:false},
-
-      {id:'TH-004',aktivitas:'Uji coba / mock-up teknologi',tujuan:'Teknologi dapat diterapkan di Indonesia',
-       pernyataan:'Hasil uji coba tidak merepresentasikan kondisi lapangan; Potensi kecelakaan kerja pada saat uji coba',
-       kategori:'Risiko Kinerja; Risiko Kecelakaan Kerja',
-       penyebab:'Metode dan persyaratan uji tidak sesuai',
-       dampak:'Teknologi gagal saat implementasi proyek',
-       pengendalian_ada:'Pengujian terbatas', hasil:'Belum Memadai', appr_ident:false,
-       analisis_k:'Ketidaksesuaian hasil uji coba atau mock-up dengan kondisi lapangan relatif jarang terjadi, namun potensi kesalahan bisa terjadi karena metode atau alat, atau lokasi yang tidak sepenuhnya merepresentasikan kondisi lapangan.',
-       prob_val:0.1, nilai_k:3,
-       analisis_d:'Dapat menyebabkan kegagalan implementasi teknologi di lapangan, dikategorikan moderat.',
-       nilai_d:3, fin_bench:226207000, appr_analisa:false, respon:'', appr_eval:false,
-       jenis:'Penguatan; Pencegahan; Pendidikan',
-       rtp:'1. Menetapkan parameter uji teknis minimum sebelum teknologi direkomendasikan.\n2. Mendokumentasikan hasil pengujian dalam laporan.\n3. Menyusun prosedur uji coba teknologi (mock-up test guideline) sesuai kondisi lapangan.',
-       sumber:'Man: tim pengujian teknologi. Method: pedoman pengujian teknologi. System: sistem pelaporan uji coba teknologi.', appr_kend:false,
-       analisis_k_res:'Parameter uji + guideline meningkatkan kualitas uji, namun risiko teknis tetap inheren',
-       prob_res:0.05, nilai_k_res:2,
-       analisis_d_res:'Dampak tetap moderat (kegagalan teknologi tetap berdampak signifikan di lapangan)',
-       nilai_d_res:3, pj:'Tim Pelaksana TH', target:'12 Bulan',
-       luaran:'Pedoman uji + laporan uji coba', appr_res:false},
-
-      {id:'TH-005',aktivitas:'Monitoring penerapan teknologi',tujuan:'Memastikan teknologi diterapkan sesuai rekomendasi',
-       pernyataan:'Penerapan teknologi di proyek tidak sesuai rekomendasi teknis',
-       kategori:'Risiko Kinerja',
-       penyebab:'Kurangnya pengawasan',
-       dampak:'Penurunan mutu',
-       pengendalian_ada:'Monitoring terbatas', hasil:'Belum Memadai', appr_ident:false,
-       analisis_k:'Penerapan teknologi yang tidak sesuai dapat terjadi karena keterbatasan monitoring, atau lokasi yang susah diakses.',
-       prob_val:0.1, nilai_k:2,
-       analisis_d:'Dampak berupa penurunan mutu pekerjaan, namun lingkup terbatas, kategori minor.',
-       nilai_d:3, fin_bench:226207000, appr_analisa:false, respon:'', appr_eval:false,
-       jenis:'Penguatan; Pencegahan; Pendidikan',
-       rtp:'1. Menetapkan indikator kinerja teknologi (performance indicator) yang harus dipantau.',
-       sumber:'Man: tim monitoring teknologi. System: sistem pelaporan monitoring proyek.', appr_kend:false,
-       analisis_k_res:'KPI monitoring meningkatkan kontrol → probabilitas turun',
-       prob_res:0.05, nilai_k_res:2,
-       analisis_d_res:'Dampak turun (early warning system melalui monitoring)',
-       nilai_d_res:2, pj:'Tim Pelaksana TH', target:'12 Bulan',
-       luaran:'KPI teknologi + laporan monitoring', appr_res:false},
-
-      {id:'TH-006',aktivitas:'Evaluasi kinerja teknologi',tujuan:'Menilai performa teknologi pasca penerapan',
-       pernyataan:'Data monitoring tidak lengkap; Data yang ada belum tervalidasi',
-       kategori:'Risiko Kinerja; Risiko Layanan',
-       penyebab:'Tidak ada standar pelaporan proyek; data tidak diverifikasi',
-       dampak:'Kesulitan evaluasi teknologi',
-       pengendalian_ada:'Pelaporan manual dari proyek', hasil:'Belum Memadai', appr_ident:false,
-       analisis_k:'Data monitoring yang tidak lengkap dapat terjadi karena sistem pelaporan proyek masih dilakukan secara manual.',
-       prob_val:0.1, nilai_k:2,
-       analisis_d:'Dampak pada kesulitan evaluasi dan pengambilan keputusan, dampak tidak langsung, kategori minor.',
-       nilai_d:2, fin_bench:226207000, appr_analisa:false, respon:'', appr_eval:false,
-       jenis:'Penguatan; Pencegahan; Pendidikan',
-       rtp:'1. Mengembangkan database kinerja kliring teknologi sebagai basis evaluasi teknologi.\n2. Melakukan verifikasi data monitoring sebelum digunakan dalam evaluasi teknologi.',
-       sumber:'System: database teknologi konstruksi. Man: tim evaluasi teknologi. Method: standar evaluasi kinerja teknologi.', appr_kend:false,
-       analisis_k_res:'Database + verifikasi data mengurangi kehilangan/ketidaklengkapan data secara signifikan',
-       prob_res:0.01, nilai_k_res:1,
-       analisis_d_res:'Dampak rendah karena data sudah terstruktur dan tervalidasi',
-       nilai_d_res:2, pj:'Tim Pelaksana TH', target:'12 Bulan',
-       luaran:'Database teknologi + standar evaluasi', appr_res:false},
-    ]
-  }
-};
+//  HELPERS
 
 //  HELPERS
 function allRisks() {
@@ -2774,6 +2692,22 @@ function renderMatrik(pkg) {
 
 //  DASHBOARD
 function renderDashboard() {
+  // ── Jika belum login, sembunyikan data & tampilkan banner ──
+  const dashDataWrap = document.getElementById('dash-data-wrap');
+  const dashLoginBanner = document.getElementById('dash-login-banner');
+
+  if (!sbUser) {
+    if (dashDataWrap)    dashDataWrap.style.display    = 'none';
+    if (dashLoginBanner) dashLoginBanner.style.display = '';
+    // Kosongkan stat cards agar tidak bocor data dari cache
+    document.getElementById('stat-grid').innerHTML = '';
+    return;
+  }
+
+  // Login — tampilkan data, sembunyikan banner
+  if (dashDataWrap)    dashDataWrap.style.display    = '';
+  if (dashLoginBanner) dashLoginBanner.style.display = 'none';
+
   const ar = allRisks();
   const totalBobot = ar.reduce((s,r)=>s+getBobot(r),0);
   const totalEMV   = ar.reduce((s,r)=>s+getEMV(r),0);
@@ -2859,6 +2793,13 @@ function renderMatrikRef() {
 function buildPkgNav() {
   const nav = document.getElementById('pkg-nav');
   nav.innerHTML = '';
+
+  // Jika belum login, tampilkan pesan di sidebar
+  if (!sbUser) {
+    nav.innerHTML = `<div style="padding:12px 18px;font-size:11px;color:var(--text-label);line-height:1.6">🔒 Login untuk melihat paket kegiatan</div>`;
+    return;
+  }
+
   Object.values(packages).forEach(p=>{
     const d = document.createElement('div');
     d.className = 'nav-item';
@@ -2883,9 +2824,77 @@ function toggleAppr(pkgId, rIdx, field, btn) {
   btn.textContent = r[field]?(field==='appr_res'?'✓':'✓ Disetujui'):(field==='appr_res'?'—':'— Belum');
 }
 
+// ══ EMAIL CONFIRM MODAL ════════════════════════════════
+function showEmailConfirmModal(email, name) {
+  // Buat modal jika belum ada
+  if (!document.getElementById('email-confirm-modal')) {
+    const m = document.createElement('div');
+    m.className = 'modal-overlay open';
+    m.id = 'email-confirm-modal';
+    m.innerHTML = `
+      <div class="modal" style="width:min(460px,92vw)">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title">📧 Konfirmasi Email Diperlukan</div>
+            <div style="font-size:11px;color:var(--slate);margin-top:2px">Akun ManRisk BGTS — Supabase</div>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div style="text-align:center;padding:8px 0 20px">
+            <div style="font-size:48px;margin-bottom:12px">✉️</div>
+            <div style="font-size:16px;font-weight:700;color:var(--text-main);margin-bottom:8px">
+              Cek inbox email Anda
+            </div>
+            <div style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:16px">
+              Email konfirmasi telah dikirim ke:<br>
+              <strong style="color:var(--accent)" id="ecm-email"></strong>
+            </div>
+            <div style="background:rgba(0,216,255,0.08);border:1px solid rgba(0,216,255,0.2);border-radius:var(--radius);padding:14px 16px;text-align:left;margin-bottom:16px">
+              <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px">📋 Langkah selanjutnya:</div>
+              <div style="font-size:12px;color:var(--text-sub);line-height:1.8">
+                1️⃣ Buka email dari <strong style="color:var(--text-main)">Supabase (noreply@mail.app.supabase.io)</strong><br>
+                2️⃣ Subject email: <em>"Confirm your email for ManRisk BGTS"</em><br>
+                3️⃣ Klik tombol <strong style="color:var(--accent3)">Confirm your email</strong> di dalam email<br>
+                4️⃣ Kembali ke halaman ini dan login dengan akun Anda
+              </div>
+            </div>
+            <div style="background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.3);border-radius:var(--radius-sm);padding:12px 14px;text-align:left;margin-bottom:20px">
+              <div style="font-size:12px;color:#ffb347;font-weight:700;margin-bottom:4px">⚠️ Email tidak ditemukan di inbox?</div>
+              <div style="font-size:11px;color:var(--text-sub);line-height:1.7">
+                Periksa folder <strong style="color:#ffb347">Spam / Junk Mail</strong> Anda.<br>
+                Email dari Supabase kadang terfilter otomatis sebagai spam.<br>
+                Email ini <strong>bukan spam</strong> — ini adalah konfirmasi resmi untuk akses <strong>ManRisk BGTS</strong>.
+              </div>
+            </div>
+            <button onclick="document.getElementById('email-confirm-modal').classList.remove('open');gsShowAuthTab('login');showModal('gs-login-modal')"
+              style="width:100%;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">
+              ✅ Sudah Konfirmasi — Login Sekarang
+            </button>
+            <div style="margin-top:12px;font-size:11px;color:var(--text-label)">
+              Email dikirim oleh Supabase atas nama ManRisk BGTS · Direktorat Jenderal Bina Marga
+            </div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(m);
+  }
+  document.getElementById('ecm-email').textContent = email;
+  document.getElementById('email-confirm-modal').classList.add('open');
+}
+
 //  MODALS
 function showModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  // Lepaskan presence saat modal edit ditutup
+  if (id === 'edit-risk-modal') {
+    clearInterval(_presenceTimer);
+    const pkgId = document.getElementById('er-pkg-id')?.value;
+    const rIdx  = parseInt(document.getElementById('er-risk-idx')?.value);
+    if (pkgId && !isNaN(rIdx)) presenceRelease(pkgId, rIdx);
+    _activeEditKey = null;
+  }
+}
 
 function openAddRisk(pkgId) {
   document.getElementById('ar-pkg-id').value = pkgId;
@@ -3042,7 +3051,86 @@ function exportCsv() {
   a.click();
 }
 
-//  INIT
+// ══ PRESENCE — "Sedang diedit oleh..." ════════════════
+// Menggunakan Supabase tabel edit_presence (heartbeat polling)
+// Schema: { risk_id text, pkg_id text, user_name text, user_email text, expires_at timestamptz }
+
+const PRESENCE_TTL_MS  = 30 * 1000; // 30 detik
+const PRESENCE_POLL_MS = 15 * 1000; // polling tiap 15 detik
+let   _presenceTimer   = null;
+let   _activeEditKey   = null; // "pkgId::rIdx"
+
+async function presenceClaim(pkgId, rIdx) {
+  if (!sbUser) return;
+  const r = packages[pkgId]?.risks[rIdx];
+  if (!r) return;
+  _activeEditKey = pkgId + '::' + rIdx;
+  const expiresAt = new Date(Date.now() + PRESENCE_TTL_MS).toISOString();
+  try {
+    await SB.upsert('edit_presence', {
+      risk_id:    r.id,
+      pkg_id:     pkgId,
+      user_name:  sbUser.displayName || sbUser.name,
+      user_email: sbUser.email,
+      expires_at: expiresAt
+    });
+  } catch(e) { /* tabel mungkin belum dibuat — abaikan */ }
+}
+
+async function presenceRelease(pkgId, rIdx) {
+  if (!sbUser) return;
+  const r = packages[pkgId]?.risks[rIdx];
+  if (!r) return;
+  _activeEditKey = null;
+  try {
+    await SB.delete('edit_presence',
+      `risk_id=eq.${encodeURIComponent(r.id)}&user_email=eq.${encodeURIComponent(sbUser.email)}`);
+  } catch(e) {}
+}
+
+async function presenceCheck(pkgId, rIdx) {
+  if (!sbUser) return null;
+  const r = packages[pkgId]?.risks[rIdx];
+  if (!r) return null;
+  try {
+    const now = new Date().toISOString();
+    const rows = await SB.get('edit_presence',
+      `?risk_id=eq.${encodeURIComponent(r.id)}&user_email=neq.${encodeURIComponent(sbUser.email)}&expires_at=gt.${now}&select=user_name,user_email`);
+    return (rows && rows.length > 0) ? rows[0] : null;
+  } catch(e) { return null; }
+}
+
+// Tampilkan badge "Sedang diedit" di atas form edit
+async function showPresenceBadge(pkgId, rIdx) {
+  const other = await presenceCheck(pkgId, rIdx);
+  let badge = document.getElementById('presence-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'presence-badge';
+    badge.style.cssText = 'display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;line-height:1.6';
+  }
+  const modalBody = document.querySelector('#edit-risk-modal .modal-body');
+  if (modalBody && !modalBody.contains(badge)) modalBody.prepend(badge);
+  if (other) {
+    badge.style.display  = '';
+    badge.style.background = 'rgba(255,140,0,0.12)';
+    badge.style.border     = '1px solid rgba(255,140,0,0.35)';
+    badge.style.color      = '#ffb347';
+    badge.innerHTML = `⚠️ <strong>${other.user_name}</strong> sedang mengedit risiko ini. Perubahan Anda mungkin bertabrakan — koordinasikan terlebih dahulu.`;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+//  ─── Init SQL helper untuk buat tabel jika belum ada ─
+// Paste di Supabase SQL Editor jika tabel belum ada:
+// CREATE TABLE IF NOT EXISTS edit_presence (
+//   risk_id text, pkg_id text, user_name text, user_email text primary key, expires_at timestamptz
+// );
+// ALTER TABLE edit_presence ENABLE ROW LEVEL SECURITY;
+// CREATE POLICY "anon full" ON edit_presence FOR ALL USING (true) WITH CHECK (true);
+
+//  ─── Init()
 function init() {
   // ── Pulihkan cache lokal jika ada (V5) ──────
   const hadCache = loadCachedData();
@@ -3566,12 +3654,108 @@ function filterTableByCol(tableId, query, colIdx, countId) {
   if(countEl) countEl.textContent = visible + ' risiko' + (q ? ' (filter aktif)' : '');
 }
 
-// ══ PRINT / PDF ══════════════════════════════════════
+// ══ PRINT / EXPORT ═══════════════════════════════════
 function doPrint() {
   const now  = new Date().toLocaleString('id-ID', {dateStyle:'full', timeStyle:'short', timeZone:'Asia/Jakarta'});
   const user = sbUser ? (" | Disiapkan oleh: " + (sbUser.displayName||sbUser.name)) : '';
   document.getElementById('print-meta').textContent = 'Dicetak pada: ' + now + user;
   window.print();
+}
+
+function exportWord() {
+  // Kumpulkan semua risiko dari paket yang aktif (atau semua jika di dashboard)
+  const targetPkgs = currentPage && packages[currentPage]
+    ? [packages[currentPage]]
+    : Object.values(packages);
+
+  if (targetPkgs.length === 0) { showToast('⚠️ Tidak ada data untuk diekspor', 3000); return; }
+
+  const now  = new Date().toLocaleString('id-ID', { dateStyle:'full', timeStyle:'short', timeZone:'Asia/Jakarta' });
+  const user = sbUser ? (sbUser.displayName||sbUser.name) : '–';
+
+  // Buat HTML yang clean & Word-compatible (tabel sederhana, warna solid)
+  let html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; margin: 20mm; color: #000; }
+  h1   { font-size: 14pt; font-weight: bold; margin-bottom: 4px; }
+  h2   { font-size: 11pt; font-weight: bold; margin: 14px 0 6px; border-bottom: 2px solid #1a2e4a; padding-bottom: 4px; color: #1a2e4a; }
+  p.meta { font-size: 9pt; color: #555; margin-bottom: 16px; }
+  table  { border-collapse: collapse; width: 100%; margin-bottom: 16px; font-size: 9pt; }
+  th     { background: #1a2e4a; color: #fff; padding: 6px 8px; text-align: left; border: 1px solid #999; font-size: 9pt; }
+  td     { padding: 5px 8px; border: 1px solid #ccc; vertical-align: top; }
+  tr:nth-child(even) td { background: #f5f7fa; }
+  .lbl-sr { background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
+  .lbl-r  { background:#c3e6cb;color:#155724;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
+  .lbl-s  { background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
+  .lbl-t  { background:#ffe5d0;color:#6c2e00;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
+  .lbl-st { background:#f8d7da;color:#721c24;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
+  .appr-y { color: #155724; font-weight:bold; }
+  .appr-n { color: #721c24; }
+  @page { size: A4 landscape; margin: 15mm; }
+</style>
+</head><body>
+<h1>Laporan Manajemen Risiko BGTS 2026</h1>
+<p class="meta">Dicetak: ${now} &nbsp;|&nbsp; Disiapkan oleh: ${user} &nbsp;|&nbsp; Direktorat Jenderal Bina Marga – BGTS</p>`;
+
+  targetPkgs.forEach(pkg => {
+    html += `<h2>${pkg.icon} ${pkg.name}</h2>`;
+    if (pkg.risks.length === 0) {
+      html += `<p style="color:#888;font-style:italic">Belum ada data risiko.</p>`;
+      return;
+    }
+    html += `<table>
+<thead><tr>
+  <th style="width:7%">Kode</th>
+  <th style="width:13%">Aktivitas</th>
+  <th style="width:15%">Pernyataan Risiko</th>
+  <th style="width:10%">Kategori</th>
+  <th style="width:5%">K</th>
+  <th style="width:5%">D</th>
+  <th style="width:5%">Bobot</th>
+  <th style="width:7%">Level</th>
+  <th style="width:9%">EMV</th>
+  <th style="width:10%">RTP</th>
+  <th style="width:8%">K Res</th>
+  <th style="width:5%">D Res</th>
+  <th style="width:6%">Bobot Res</th>
+</tr></thead><tbody>`;
+
+    pkg.risks.forEach(r => {
+      const b  = getBobot(r), br = getBobotRes(r);
+      const bl = bobotLabel(b);
+      const lblClass = b<=5?'lbl-sr':b<=10?'lbl-r':b<=15?'lbl-s':b<=19?'lbl-t':'lbl-st';
+      html += `<tr>
+        <td>${r.id}</td>
+        <td>${r.aktivitas||''}</td>
+        <td>${r.pernyataan||''}</td>
+        <td>${r.kategori||''}</td>
+        <td style="text-align:center">${r.nilai_k}</td>
+        <td style="text-align:center">${r.nilai_d}</td>
+        <td style="text-align:center;font-weight:bold">${b}</td>
+        <td><span class="${lblClass}">${bl}</span></td>
+        <td style="text-align:right">${fmt(getEMV(r))}</td>
+        <td style="font-size:8pt">${(r.rtp||'').replace(/\n/g,'<br>')}</td>
+        <td style="text-align:center">${r.nilai_k_res||'–'}</td>
+        <td style="text-align:center">${r.nilai_d_res||'–'}</td>
+        <td style="text-align:center;font-weight:bold">${br}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table>`;
+  });
+
+  html += `</body></html>`;
+
+  // Download sebagai .html yang bisa dibuka di Word
+  const blob = new Blob([html], { type: 'application/msword;charset=utf-8' });
+  const a    = document.createElement('a');
+  const pkgLabel = (currentPage && packages[currentPage]) ? ('_' + currentPage) : '_Semua';
+  a.href     = URL.createObjectURL(blob);
+  a.download = `ManRisk_BGTS${pkgLabel}_${new Date().toISOString().slice(0,10)}.doc`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  showToast('📄 File Word berhasil diunduh! Buka di Microsoft Word.');
 }
 
 // ══ SYNC STATUS ═══════════════════════════════════════
@@ -3751,6 +3935,13 @@ function openEditRisk(pkgId, rIdx) {
   document.getElementById('er-luaran').value         = r.luaran||'';
 
   showModal('edit-risk-modal');
+
+  // Presence: klaim sebagai editor aktif & cek apakah ada user lain
+  presenceClaim(pkgId, rIdx);
+  showPresenceBadge(pkgId, rIdx);
+  // Heartbeat: perpanjang klaim tiap 20 detik selama modal terbuka
+  clearInterval(_presenceTimer);
+  _presenceTimer = setInterval(() => presenceClaim(pkgId, rIdx), 20000);
 }
 
 function doEditRisk() {
