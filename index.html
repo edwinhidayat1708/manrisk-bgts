@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V5-13 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-15 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
@@ -981,7 +981,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     </div>
     <button class="topbar-action" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.25);font-weight:700;font-size:12px" onclick="doPrint()">🖨 Print</button>
     <button class="topbar-action" style="background:rgba(37,99,235,0.15);color:#93c5fd;border:1px solid rgba(37,99,235,0.25);font-weight:700;font-size:12px" onclick="exportWord()" title="Export ke Word — bisa dibuka di Microsoft Word, crop/paste ke laporan">📄 Word</button>
-    <div id="sync-indicator" class="offline" title="Status sinkronisasi dengan Supabase">
+    <div id="sync-indicator" class="offline" style="display:none" title="Status sinkronisasi dengan Supabase">
       <div id="sync-dot"></div>
       <span id="sync-label">Offline</span>
     </div>
@@ -993,7 +993,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     </div>
     <button class="topbar-action" id="btn-gs-login"
       style="background:#4285f4;color:white;border:none;font-weight:700;font-size:12px"
-      onclick="gsLogin()">🔑 Login Google</button>
+      onclick="gsLogin()">🔑 LOGIN</button>
     <button class="topbar-action" id="btn-gs-save"
       style="background:#22c55e;color:white;border:none;font-weight:700;font-size:12px;display:none"
       onclick="gsSaveAll()">☁️ Simpan</button>
@@ -1420,11 +1420,12 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-13 (2026-06-12)
-//  CHANGES: hapus banner "Data Risiko Bersifat Rahasia" dari dashboard
-//  CHANGES: auto-load data setelah login, toast lebih informatif
-//  CHANGES: logout membersihkan semua data & cache, reset ke tampilan kosong
-//  CHANGES: validasi SEMUA field wajib diisi sebelum simpan risiko
+//  VERSI: v5-15 (2026-06-12)
+//  CHANGES: auto-load fix (await + setTimeout 200ms di restoreSession)
+//  CHANGES: tombol LOGIN (ganti "Login Google")
+//  CHANGES: hapus "⚠ Belum disimpan", auto-save tiap perubahan, toast "Data tersimpan"
+//  CHANGES: Print & Word per tab aktif (Identifikasi/Analisa/Evaluasi/Pengendalian/Residual/Matrik)
+//  CHANGES: Print buka jendela baru dengan layout A4 landscape, warna terjaga
 
 //  KONFIGURASI SUPABASE
 //  Ganti dua nilai di bawah dengan data dari project Supabase Anda
@@ -1716,8 +1717,8 @@ async function gsDoLogin() {
 
     closeModal('gs-login-modal');
     gsUpdateUI(true);
-    showToast('✅ Login sebagai ' + sbUser.displayName);
-    sbLoadAll();
+    showToast('✅ Login sebagai ' + sbUser.displayName + ' — memuat data...');
+    await sbLoadAll();
   } catch(e) {
     errEl.textContent = '❌ ' + (e.message.includes('Invalid login') ? 'Email atau password salah.' : e.message);
   } finally {
@@ -1769,8 +1770,8 @@ async function gsDoSignup() {
 
     closeModal('gs-login-modal');
     gsUpdateUI(true);
-    showToast('🎉 Akun dibuat! Login sebagai ' + sbUser.displayName);
-    sbLoadAll();
+    showToast('🎉 Akun dibuat! Login sebagai ' + sbUser.displayName + ' — memuat data...');
+    await sbLoadAll();
   } catch(e) {
     errEl.textContent = '❌ ' + (e.message.includes('already registered') ? 'Email sudah terdaftar. Silakan login.' : e.message);
   } finally {
@@ -1810,14 +1811,12 @@ function gsRestoreSession() {
     try {
       _sbSession = JSON.parse(savedSession);
       sbUser     = JSON.parse(savedUser);
-      // Cek apakah token masih valid (belum expired)
       if (_sbSession.expires_at && Date.now() > _sbSession.expires_at * 1000) {
-        // Token expired, coba refresh
-        SBAuth.refreshToken(_sbSession.refresh_token).then(d => {
+        SBAuth.refreshToken(_sbSession.refresh_token).then(async d => {
           _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
           localStorage.setItem('sbSession', JSON.stringify(_sbSession));
           gsUpdateUI(true);
-          sbLoadAll();
+          await sbLoadAll();
         }).catch(() => {
           _sbSession = null; sbUser = null;
           localStorage.removeItem('sbSession'); localStorage.removeItem('sbUser');
@@ -1825,7 +1824,8 @@ function gsRestoreSession() {
         });
       } else {
         gsUpdateUI(true);
-        sbLoadAll();
+        // Delay sedikit agar DOM siap, lalu load otomatis
+        setTimeout(() => sbLoadAll(), 200);
       }
     } catch(e) {
       localStorage.removeItem('sbSession'); localStorage.removeItem('sbUser');
@@ -1957,7 +1957,7 @@ async function gsSaveAll() {
 
     cacheLocalData();
     setSyncState('synced');
-    showToast('☁️ ' + allRows.length + ' risiko tersimpan ke Supabase!');
+    showToast('✅ Data tersimpan — ' + allRows.length + ' risiko berhasil disimpan ke Supabase');
   } catch(e) {
     setSyncState('unsynced');
     showToast('❌ Gagal simpan: ' + e.message, 5000);
@@ -3696,136 +3696,421 @@ function filterTableByCol(tableId, query, colIdx, countId) {
 
 // ══ PRINT / EXPORT ═══════════════════════════════════
 function doPrint() {
+  const TAB_NAMES = ['Identifikasi','Analisa','Evaluasi','Pengendalian','Residual','Matrik'];
+  const pkg    = currentPage && packages[currentPage] ? packages[currentPage] : null;
+  const tabIdx = pkg ? (currentTab[currentPage] || 0) : -1;
+  const tabLabel = tabIdx >= 0 ? TAB_NAMES[tabIdx] : 'Semua';
+  const pkgLabel = pkg ? pkg.name : 'Semua Paket';
   const now  = new Date().toLocaleString('id-ID', {dateStyle:'full', timeStyle:'short', timeZone:'Asia/Jakarta'});
-  const user = sbUser ? (" | Disiapkan oleh: " + (sbUser.displayName||sbUser.name)) : '';
-  document.getElementById('print-meta').textContent = 'Dicetak pada: ' + now + user;
-  window.print();
+  const user = sbUser ? (sbUser.displayName||sbUser.name) : '–';
+
+  // Gunakan exportWord tapi buka di jendela baru untuk print (bukan download)
+  const TAB_NAMES2 = ['Identifikasi','Analisa','Evaluasi','Pengendalian','Residual','Matrik'];
+
+  function lvlClass(b) { return b<=5?'sr':b<=10?'r':b<=15?'s':b<=19?'t':'st'; }
+  function lvlLabel(b) { return b<=5?'Sangat Rendah':b<=10?'Rendah':b<=15?'Sedang':b<=19?'Tinggi':'Sangat Tinggi'; }
+  function mcColor(b)  { return b<=5?'mc-sr':b<=10?'mc-r':b<=15?'mc-s':b<=19?'mc-t':'mc-st'; }
+  function appr(v)     { return v ? '<b style="color:#155724">✓ Approved</b>' : '<span style="color:#888">— Belum</span>'; }
+  function esc(s)      { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+
+  const CSS_PRINT = `
+    * { box-sizing: border-box; }
+    body { font-family: Calibri, Arial, sans-serif; font-size: 9.5pt; color: #000; margin: 0; padding: 0; }
+    h1   { font-size: 13pt; font-weight: bold; margin: 0 0 2px; }
+    h2   { font-size: 11pt; font-weight: bold; margin: 14px 0 5px; color: #1a2e4a; border-bottom: 2px solid #1a2e4a; padding-bottom: 3px; }
+    p.meta { font-size: 8pt; color: #555; margin: 2px 0 12px; border-bottom: 1px solid #ccc; padding-bottom: 6px; }
+    table  { border-collapse: collapse; width: 100%; margin-bottom: 12px; font-size: 8pt; page-break-inside: auto; }
+    thead  { display: table-header-group; }
+    th     { background: #1a2e4a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #fff !important; padding: 5px 6px; text-align: left; border: 1px solid #1a2e4a; font-size: 8pt; white-space: nowrap; }
+    td     { padding: 4px 6px; border: 1px solid #bbb; vertical-align: top; line-height: 1.4; }
+    tr:nth-child(even) td { background: #f4f6f9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sr  { background:#d4edda !important;color:#155724 !important;padding:1px 4px;border-radius:2px;font-weight:bold;font-size:7.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+    .r   { background:#c3e6cb !important;color:#155724 !important;padding:1px 4px;border-radius:2px;font-weight:bold;font-size:7.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+    .s   { background:#fff3cd !important;color:#856404 !important;padding:1px 4px;border-radius:2px;font-weight:bold;font-size:7.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+    .t   { background:#ffe5d0 !important;color:#6c2e00 !important;padding:1px 4px;border-radius:2px;font-weight:bold;font-size:7.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+    .st  { background:#f8d7da !important;color:#721c24 !important;padding:1px 4px;border-radius:2px;font-weight:bold;font-size:7.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+    .mx-table { border-collapse:collapse; font-size:7.5pt; width:100%; margin-bottom:10px; }
+    .mx-table th { background:#1a2e4a !important; color:#fff !important; padding:3px 5px; border:1px solid #999; text-align:center; font-size:7pt; white-space:nowrap; }
+    .mx-table .rh { background:#e8edf3 !important; color:#333 !important; font-size:7pt; padding:3px 5px; border:1px solid #bbb; white-space:nowrap; }
+    .mx-c { border:1px solid #bbb; text-align:center; padding:3px 2px; font-size:7.5pt; font-weight:bold; }
+    .mc-sr { background:#86efac !important; color:#14532d !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .mc-r  { background:#22c55e !important; color:#052e16 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .mc-s  { background:#facc15 !important; color:#713f12 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .mc-t  { background:#f97316 !important; color:#431407 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .mc-st { background:#ef4444 !important; color:#450a0a !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .two-col { display: table; width: 100%; border-spacing: 16px 0; }
+    .two-col-cell { display: table-cell; width: 50%; vertical-align: top; }
+    @page { size: A4 landscape; margin: 12mm 14mm; }
+    @media print { body { padding: 0; } }
+  `;
+
+  // Reuse generators from exportWord (defined inline, same logic)
+  function gi(p) {
+    const rows = p.risks.map((r,i) => `<tr>
+      <td style="text-align:center">${i+1}</td><td><b>${r.id}</b></td>
+      <td>${esc(r.aktivitas)}</td><td>${esc(r.tujuan)}</td><td>${esc(r.pernyataan)}</td>
+      <td>${esc(r.kategori)}</td><td>${esc(r.penyebab)}</td><td>${esc(r.dampak)}</td>
+      <td>${esc(r.pengendalian_ada)}</td><td>${esc(r.hasil)}</td>
+      <td style="text-align:center">${appr(r.appr_ident)}</td>
+    </tr>`).join('');
+    return `<table><thead><tr><th>#</th><th>Kode</th><th>Aktivitas</th><th>Tujuan</th><th>Pernyataan Risiko</th><th>Kategori</th><th>Penyebab</th><th>Dampak</th><th>Pengendalian Ada</th><th>Hasil</th><th>Approval</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  function ga(p) {
+    const rows = p.risks.map(r => { const b=getBobot(r),emv=getEMV(r); return `<tr>
+      <td><b>${r.id}</b></td><td>${esc(r.analisis_k)}</td><td style="text-align:center">${r.prob_val}</td>
+      <td style="text-align:center"><b>${r.nilai_k}</b></td><td>${esc(r.analisis_d)}</td>
+      <td style="text-align:center"><b>${r.nilai_d}</b></td>
+      <td style="text-align:center"><b>${b}</b></td><td><span class="${lvlClass(b)}">${lvlLabel(b)}</span></td>
+      <td style="text-align:right">${fmt(emv)}</td><td style="text-align:center">${appr(r.appr_analisa)}</td>
+    </tr>`; }).join('');
+    return `<table><thead><tr><th>Kode</th><th>Analisis K</th><th>Prob</th><th>Nilai K</th><th>Analisis D</th><th>Nilai D</th><th>Bobot</th><th>Level</th><th>EMV</th><th>Approval</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  function gev(p) {
+    const rows = p.risks.map(r => { const b=getBobot(r),emv=getEMV(r),pEmv=emv/PAGU;
+      const pL=pEmv<=0.0005?'Sangat Rendah':pEmv<=0.0025?'Rendah':pEmv<=0.005?'Sedang':pEmv<=0.01?'Tinggi':'Sangat Tinggi';
+      return `<tr><td><b>${r.id}</b></td><td style="text-align:center"><b>${b}</b></td>
+      <td style="text-align:right">${fmt(emv)}</td><td><span class="${lvlClass(b)}">${lvlLabel(b)}</span></td>
+      <td>${pL}</td><td>${esc(r.respon)}</td><td style="text-align:center">${appr(r.appr_eval)}</td></tr>`;
+    }).join('');
+    return `<table><thead><tr><th>Kode</th><th>Bobot K×D</th><th>EMV</th><th>Level</th><th>Prioritas EMV</th><th>Respon Risiko</th><th>Approval</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  function gp(p) {
+    const rows = p.risks.map(r => `<tr>
+      <td><b>${r.id}</b><br><small>${esc(r.aktivitas)}</small></td>
+      <td>${esc(r.kategori)}</td><td>${esc(r.jenis)}</td>
+      <td style="white-space:pre-wrap">${esc(r.rtp)}</td>
+      <td>${esc(r.sumber)}</td><td style="text-align:center">${appr(r.appr_kend)}</td>
+    </tr>`).join('');
+    return `<table><thead><tr><th>Kode / Aktivitas</th><th>Kategori</th><th>Jenis</th><th>RTP</th><th>Sumber Daya</th><th>Approval</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  function gr(p) {
+    const rows = p.risks.map(r => { const bi=getBobot(r),br=getBobotRes(r),emvR=getEMVres(r);
+      return `<tr><td><b>${r.id}</b></td><td>${esc(r.analisis_k_res)}</td>
+      <td style="text-align:center"><b>${r.nilai_k_res}</b></td><td>${esc(r.analisis_d_res)}</td>
+      <td style="text-align:center"><b>${r.nilai_d_res}</b></td><td style="text-align:center">${r.prob_res}</td>
+      <td style="text-align:center"><span class="${lvlClass(bi)}">${bi}</span></td>
+      <td style="text-align:center"><span class="${lvlClass(br)}">${br}</span></td>
+      <td style="text-align:right">${fmt(emvR)}</td>
+      <td>${esc(r.pj)}</td><td>${esc(r.target)}</td><td>${esc(r.luaran)}</td>
+      <td style="text-align:center">${appr(r.appr_res)}</td></tr>`;
+    }).join('');
+    return `<table><thead><tr><th>Kode</th><th>Analisis K Res</th><th>K Res</th><th>Analisis D Res</th><th>D Res</th><th>Prob Res</th><th>Bobot Awal</th><th>Bobot Res</th><th>EMV Res</th><th>PJ</th><th>Target</th><th>Luaran</th><th>Approval</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  function gm(p) {
+    const PL=['5 — Hampir pasti','4 — Sering','3 — Kadang','2 — Jarang','1 — Hampir tidak'];
+    const DL=['1 Tidak Sig','2 Minor','3 Moderat','4 Signifikan','5 Sangat Sig'];
+    function bGrid(useRes){ const g=Array.from({length:5},()=>Array.from({length:5},()=>[]));
+      p.risks.forEach(r=>{ const nk=useRes?(r.nilai_k_res||1):(r.nilai_k||1),nd=useRes?(r.nilai_d_res||1):(r.nilai_d||1);
+        const ri=5-nk,ci=nd-1; if(ri>=0&&ri<5&&ci>=0&&ci<5) g[ri][ci].push(r.id); }); return g; }
+    function bTable(grid,title){ const hc=DL.map(d=>`<th style="font-size:7pt">${d}</th>`).join('');
+      const br=PL.map((pl,ri)=>{ const cells=[0,1,2,3,4].map(ci=>{
+        const b=(5-ri)*(ci+1),codes=grid[ri][ci];
+        return `<td class="mx-c ${mcColor(b)}">${codes.length?codes.join('<br>'):b}</td>`;
+      }).join(''); return `<tr><td class="rh">${pl}</td>${cells}</tr>`; }).join('');
+      return `<p style="font-weight:bold;font-size:8.5pt;margin:8px 0 3px">${title}</p>
+        <table class="mx-table"><thead><tr><th style="white-space:nowrap">K ↓ / D →</th>${hc}</tr></thead><tbody>${br}</tbody></table>`; }
+    const legend=[['#86efac','#14532d','Sangat Rendah (1–5)'],['#22c55e','#052e16','Rendah (6–10)'],['#facc15','#713f12','Sedang (11–15)'],['#f97316','#431407','Tinggi (16–19)'],['#ef4444','#450a0a','Sangat Tinggi (20–25)']];
+    const lgHtml=legend.map(([bg,c,l])=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:10px;font-size:7.5pt"><span style="width:12px;height:12px;background:${bg};display:inline-block;border-radius:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact"></span><b style="color:${c}">${l}</b></span>`).join('');
+    return `<div style="margin-bottom:6px">${lgHtml}</div>
+      <div class="two-col"><div class="two-col-cell">${bTable(bGrid(false),'⬛ Sebelum Pengendalian (Inherent Risk)')}</div>
+      <div class="two-col-cell">${bTable(bGrid(true),'✅ Setelah Pengendalian (Residual Risk)')}</div></div>`;
+  }
+
+  const generators = [gi, ga, gev, gp, gr, gm];
+  let body = '';
+  if (pkg) {
+    body += `<h2>${pkg.icon} ${pkg.name} — Tab: ${tabLabel}</h2>`;
+    body += pkg.risks.length === 0
+      ? `<p style="color:#888;font-style:italic">Belum ada data risiko.</p>`
+      : generators[tabIdx](pkg);
+  } else {
+    Object.values(packages).forEach(p => {
+      body += `<h2>${p.icon} ${p.name}</h2>`;
+      body += p.risks.length === 0 ? `<p style="color:#888;font-style:italic">Belum ada data.</p>` : gi(p);
+    });
+  }
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Laporan ManRisk BGTS — ${tabLabel}</title>
+<style>${CSS_PRINT}</style></head><body>
+<h1>Laporan Manajemen Risiko BGTS 2026</h1>
+<p class="meta">Paket: ${pkgLabel} &nbsp;|&nbsp; Tab: ${tabLabel} &nbsp;|&nbsp; Dicetak: ${now} &nbsp;|&nbsp; Oleh: ${user} &nbsp;|&nbsp; Direktorat Jenderal Bina Marga – BGTS</p>
+${body}
+<script>window.onload=function(){window.print();};<\/script>
+</body></html>`);
+  win.document.close();
 }
 
 function exportWord() {
-  // Kumpulkan semua risiko dari paket yang aktif (atau semua jika di dashboard)
-  const targetPkgs = currentPage && packages[currentPage]
-    ? [packages[currentPage]]
-    : Object.values(packages);
+  const TAB_NAMES = ['Identifikasi','Analisa','Evaluasi','Pengendalian','Residual','Matrik'];
 
-  if (targetPkgs.length === 0) { showToast('⚠️ Tidak ada data untuk diekspor', 3000); return; }
+  // Tentukan paket & tab aktif
+  const pkg    = currentPage && packages[currentPage] ? packages[currentPage] : null;
+  const tabIdx = pkg ? (currentTab[currentPage] || 0) : -1;
+
+  if (!pkg && Object.keys(packages).length === 0) {
+    showToast('⚠️ Tidak ada data untuk diekspor', 3000); return;
+  }
 
   const now  = new Date().toLocaleString('id-ID', { dateStyle:'full', timeStyle:'short', timeZone:'Asia/Jakarta' });
-  const user = sbUser ? (sbUser.displayName||sbUser.name) : '–';
+  const user = sbUser ? (sbUser.displayName || sbUser.name) : '–';
+  const tabLabel = tabIdx >= 0 ? TAB_NAMES[tabIdx] : 'Semua';
+  const pkgLabel = pkg ? pkg.name : 'Semua Paket';
 
-  // Buat HTML yang clean & Word-compatible (tabel sederhana, warna solid)
-  let html = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<style>
-  body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; margin: 20mm; color: #000; }
-  h1   { font-size: 14pt; font-weight: bold; margin-bottom: 4px; }
-  h2   { font-size: 11pt; font-weight: bold; margin: 14px 0 6px; border-bottom: 2px solid #1a2e4a; padding-bottom: 4px; color: #1a2e4a; }
-  p.meta { font-size: 9pt; color: #555; margin-bottom: 16px; }
-  table  { border-collapse: collapse; width: 100%; margin-bottom: 16px; font-size: 9pt; }
-  th     { background: #1a2e4a; color: #fff; padding: 6px 8px; text-align: left; border: 1px solid #999; font-size: 9pt; }
-  td     { padding: 5px 8px; border: 1px solid #ccc; vertical-align: top; }
-  tr:nth-child(even) td { background: #f5f7fa; }
-  .lbl-sr { background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
-  .lbl-r  { background:#c3e6cb;color:#155724;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
-  .lbl-s  { background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
-  .lbl-t  { background:#ffe5d0;color:#6c2e00;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
-  .lbl-st { background:#f8d7da;color:#721c24;padding:2px 6px;border-radius:3px;font-size:8pt;font-weight:bold; }
-  .appr-y { color: #155724; font-weight:bold; }
-  .appr-n { color: #721c24; }
-  @page { size: A4 landscape; margin: 15mm; }
-</style>
-</head><body>
-<h1>Laporan Manajemen Risiko BGTS 2026</h1>
-<p class="meta">Dicetak: ${now} &nbsp;|&nbsp; Disiapkan oleh: ${user} &nbsp;|&nbsp; Direktorat Jenderal Bina Marga – BGTS</p>`;
+  const CSS = `
+    body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; color: #000; margin: 0; }
+    h1   { font-size: 13pt; font-weight: bold; margin: 0 0 2px; }
+    h2   { font-size: 11pt; font-weight: bold; margin: 16px 0 6px; color: #1a2e4a; border-bottom: 2px solid #1a2e4a; padding-bottom: 3px; }
+    h3   { font-size: 10pt; font-weight: bold; margin: 10px 0 4px; color: #333; }
+    p.meta { font-size: 8.5pt; color: #555; margin: 2px 0 14px; }
+    table  { border-collapse: collapse; width: 100%; margin-bottom: 14px; font-size: 8.5pt; page-break-inside: avoid; }
+    th     { background: #1a2e4a; color: #fff; padding: 5px 7px; text-align: left; border: 1px solid #1a2e4a; white-space: nowrap; }
+    td     { padding: 4px 7px; border: 1px solid #bbb; vertical-align: top; line-height: 1.4; }
+    tr:nth-child(even) td { background: #f4f6f9; }
+    .sr  { background:#d4edda;color:#155724;padding:1px 5px;border-radius:2px;font-weight:bold;font-size:8pt; }
+    .r   { background:#c3e6cb;color:#155724;padding:1px 5px;border-radius:2px;font-weight:bold;font-size:8pt; }
+    .s   { background:#fff3cd;color:#856404;padding:1px 5px;border-radius:2px;font-weight:bold;font-size:8pt; }
+    .t   { background:#ffe5d0;color:#6c2e00;padding:1px 5px;border-radius:2px;font-weight:bold;font-size:8pt; }
+    .st  { background:#f8d7da;color:#721c24;padding:1px 5px;border-radius:2px;font-weight:bold;font-size:8pt; }
+    .ya  { color:#155724; font-weight:bold; }
+    .blm { color:#721c24; }
+    /* Matrik */
+    .mx-table { border-collapse:collapse; font-size:8pt; margin-bottom:10px; }
+    .mx-table th { background:#1a2e4a; color:#fff; padding:4px 6px; border:1px solid #999; text-align:center; font-size:7.5pt; }
+    .mx-table .rh { background:#e8edf3; color:#333; font-size:7.5pt; padding:4px 6px; border:1px solid #bbb; white-space:nowrap; }
+    .mx-c { border:1px solid #bbb; text-align:center; padding:3px; font-size:7.5pt; font-weight:bold; }
+    .mc-sr { background:#86efac; color:#14532d; }
+    .mc-r  { background:#22c55e; color:#052e16; }
+    .mc-s  { background:#facc15; color:#713f12; }
+    .mc-t  { background:#f97316; color:#431407; }
+    .mc-st { background:#ef4444; color:#450a0a; }
+    @page { size: A4 landscape; margin: 12mm 14mm; }
+  `;
 
-  targetPkgs.forEach(pkg => {
-    html += `<h2>${pkg.icon} ${pkg.name}</h2>`;
-    if (pkg.risks.length === 0) {
-      html += `<p style="color:#888;font-style:italic">Belum ada data risiko.</p>`;
-      return;
-    }
-    html += `<table>
-<thead><tr>
-  <th style="width:7%">Kode</th>
-  <th style="width:13%">Aktivitas</th>
-  <th style="width:15%">Pernyataan Risiko</th>
-  <th style="width:10%">Kategori</th>
-  <th style="width:5%">K</th>
-  <th style="width:5%">D</th>
-  <th style="width:5%">Bobot</th>
-  <th style="width:7%">Level</th>
-  <th style="width:9%">EMV</th>
-  <th style="width:10%">RTP</th>
-  <th style="width:8%">K Res</th>
-  <th style="width:5%">D Res</th>
-  <th style="width:6%">Bobot Res</th>
-</tr></thead><tbody>`;
+  function lvlClass(b) { return b<=5?'sr':b<=10?'r':b<=15?'s':b<=19?'t':'st'; }
+  function lvlLabel(b) { return b<=5?'Sangat Rendah':b<=10?'Rendah':b<=15?'Sedang':b<=19?'Tinggi':'Sangat Tinggi'; }
+  function mcColor(b)  { return b<=5?'mc-sr':b<=10?'mc-r':b<=15?'mc-s':b<=19?'mc-t':'mc-st'; }
+  function appr(v)     { return v ? '<span class="ya">✓ Approved</span>' : '<span class="blm">— Belum</span>'; }
+  function esc(s)      { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
 
-    pkg.risks.forEach(r => {
-      const b  = getBobot(r), br = getBobotRes(r);
-      const bl = bobotLabel(b);
-      const lblClass = b<=5?'lbl-sr':b<=10?'lbl-r':b<=15?'lbl-s':b<=19?'lbl-t':'lbl-st';
-      html += `<tr>
-        <td>${r.id}</td>
-        <td>${r.aktivitas||''}</td>
-        <td>${r.pernyataan||''}</td>
-        <td>${r.kategori||''}</td>
-        <td style="text-align:center">${r.nilai_k}</td>
-        <td style="text-align:center">${r.nilai_d}</td>
-        <td style="text-align:center;font-weight:bold">${b}</td>
-        <td><span class="${lblClass}">${bl}</span></td>
-        <td style="text-align:right">${fmt(getEMV(r))}</td>
-        <td style="font-size:8pt">${(r.rtp||'').replace(/\n/g,'<br>')}</td>
-        <td style="text-align:center">${r.nilai_k_res||'–'}</td>
-        <td style="text-align:center">${r.nilai_d_res||'–'}</td>
-        <td style="text-align:center;font-weight:bold">${br}</td>
+  // ── Generator per tab ────────────────────────────────
+  function genIdentifikasi(p) {
+    const rows = p.risks.map((r,i) => `<tr>
+      <td style="text-align:center">${i+1}</td>
+      <td><b>${r.id}</b></td>
+      <td>${esc(r.aktivitas)}</td>
+      <td>${esc(r.tujuan)}</td>
+      <td>${esc(r.pernyataan)}</td>
+      <td>${esc(r.kategori)}</td>
+      <td>${esc(r.penyebab)}</td>
+      <td>${esc(r.dampak)}</td>
+      <td>${esc(r.pengendalian_ada)}</td>
+      <td>${esc(r.hasil)}</td>
+      <td style="text-align:center">${appr(r.appr_ident)}</td>
+    </tr>`).join('');
+    return `<table><thead><tr>
+      <th>#</th><th>Kode</th><th>Aktivitas</th><th>Tujuan</th><th>Pernyataan Risiko</th>
+      <th>Kategori</th><th>Penyebab</th><th>Dampak</th><th>Pengendalian Ada</th><th>Hasil</th><th>Approval</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function genAnalisa(p) {
+    const rows = p.risks.map(r => {
+      const b = getBobot(r), emv = getEMV(r);
+      return `<tr>
+        <td><b>${r.id}</b></td>
+        <td>${esc(r.analisis_k)}</td>
+        <td style="text-align:center">${r.prob_val}</td>
+        <td style="text-align:center"><b>${r.nilai_k}</b></td>
+        <td>${esc(r.analisis_d)}</td>
+        <td style="text-align:center"><b>${r.nilai_d}</b></td>
+        <td style="text-align:center"><b>${b}</b></td>
+        <td><span class="${lvlClass(b)}">${lvlLabel(b)}</span></td>
+        <td style="text-align:right">${fmt(emv)}</td>
+        <td style="text-align:center">${appr(r.appr_analisa)}</td>
       </tr>`;
+    }).join('');
+    return `<table><thead><tr>
+      <th>Kode</th><th>Analisis K (Kemungkinan)</th><th>Prob</th><th>Nilai K</th>
+      <th>Analisis D (Dampak)</th><th>Nilai D</th><th>Bobot K×D</th><th>Level</th><th>EMV</th><th>Approval</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function genEvaluasi(p) {
+    const rows = p.risks.map(r => {
+      const b = getBobot(r), emv = getEMV(r), pEmv = emv/PAGU;
+      const pLabel = pEmv<=0.0005?'Sangat Rendah':pEmv<=0.0025?'Rendah':pEmv<=0.005?'Sedang':pEmv<=0.01?'Tinggi':'Sangat Tinggi';
+      return `<tr>
+        <td><b>${r.id}</b></td>
+        <td style="text-align:center"><b>${b}</b></td>
+        <td style="text-align:right">${fmt(emv)}</td>
+        <td><span class="${lvlClass(b)}">${lvlLabel(b)}</span></td>
+        <td>${pLabel}</td>
+        <td>${esc(r.respon)}</td>
+        <td style="text-align:center">${appr(r.appr_eval)}</td>
+      </tr>`;
+    }).join('');
+    return `<table><thead><tr>
+      <th>Kode</th><th>Bobot K×D</th><th>EMV</th><th>Level Risiko</th>
+      <th>Prioritas EMV</th><th>Respon Risiko</th><th>Approval</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function genPengendalian(p) {
+    const rows = p.risks.map(r => `<tr>
+      <td><b>${r.id}</b><br><span style="font-size:7.5pt;color:#555">${esc(r.aktivitas)}</span></td>
+      <td>${esc(r.kategori)}</td>
+      <td>${esc(r.jenis)}</td>
+      <td style="white-space:pre-wrap">${esc(r.rtp)}</td>
+      <td>${esc(r.sumber)}</td>
+      <td style="text-align:center">${appr(r.appr_kend)}</td>
+    </tr>`).join('');
+    return `<table><thead><tr>
+      <th>Kode / Aktivitas</th><th>Kategori</th><th>Jenis Pengendalian</th>
+      <th>RTP (Rencana Tindak Pengendalian)</th><th>Sumber Daya</th><th>Approval</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function genResidual(p) {
+    const rows = p.risks.map(r => {
+      const bi = getBobot(r), br = getBobotRes(r), emvR = getEMVres(r);
+      return `<tr>
+        <td><b>${r.id}</b></td>
+        <td>${esc(r.analisis_k_res)}</td>
+        <td style="text-align:center"><b>${r.nilai_k_res}</b></td>
+        <td>${esc(r.analisis_d_res)}</td>
+        <td style="text-align:center"><b>${r.nilai_d_res}</b></td>
+        <td style="text-align:center">${r.prob_res}</td>
+        <td style="text-align:center"><span class="${lvlClass(bi)}">${bi}</span></td>
+        <td style="text-align:center"><span class="${lvlClass(br)}">${br}</span></td>
+        <td style="text-align:right">${fmt(emvR)}</td>
+        <td>${esc(r.pj)}</td>
+        <td>${esc(r.target)}</td>
+        <td>${esc(r.luaran)}</td>
+        <td style="text-align:center">${appr(r.appr_res)}</td>
+      </tr>`;
+    }).join('');
+    return `<table><thead><tr>
+      <th>Kode</th><th>Analisis K Res</th><th>K Res</th><th>Analisis D Res</th><th>D Res</th>
+      <th>Prob Res</th><th>Bobot Awal</th><th>Bobot Res</th><th>EMV Res</th>
+      <th>PJ RTP</th><th>Target</th><th>Luaran</th><th>Approval</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function genMatrik(p) {
+    const PROB_LABELS = ['5 — Hampir pasti','4 — Sering','3 — Kadang','2 — Jarang','1 — Hampir tidak'];
+    const DAM_LABELS  = ['1 Tidak Sig','2 Minor','3 Moderat','4 Signifikan','5 Sangat Sig'];
+    function buildGrid(useRes) {
+      const grid = Array.from({length:5},()=>Array.from({length:5},()=>[]));
+      p.risks.forEach(r => {
+        const nk = useRes?(r.nilai_k_res||1):(r.nilai_k||1);
+        const nd = useRes?(r.nilai_d_res||1):(r.nilai_d||1);
+        const ri = 5-nk, ci = nd-1;
+        if(ri>=0&&ri<5&&ci>=0&&ci<5) grid[ri][ci].push(r.id);
+      });
+      return grid;
+    }
+    function buildTable(grid, title) {
+      const headerCells = DAM_LABELS.map(d=>`<th style="width:80px;font-size:7pt">${d}</th>`).join('');
+      const bodyRows = PROB_LABELS.map((pl,ri) => {
+        const cells = [0,1,2,3,4].map(ci => {
+          const b = (5-ri)*(ci+1);
+          const codes = grid[ri][ci];
+          const content = codes.length ? codes.join('<br>') : b;
+          return `<td class="mx-c ${mcColor(b)}" style="width:80px;height:36px">${content}</td>`;
+        }).join('');
+        return `<tr><td class="rh">${pl}</td>${cells}</tr>`;
+      }).join('');
+      return `<p style="font-weight:bold;font-size:9pt;margin:10px 0 4px">${title}</p>
+        <table class="mx-table"><thead>
+          <tr><th style="width:120px">K ↓ / D →</th>${headerCells}</tr>
+        </thead><tbody>${bodyRows}</tbody></table>`;
+    }
+    const legend = [['#86efac','#14532d','Sangat Rendah (1–5)'],['#22c55e','#052e16','Rendah (6–10)'],['#facc15','#713f12','Sedang (11–15)'],['#f97316','#431407','Tinggi (16–19)'],['#ef4444','#450a0a','Sangat Tinggi (20–25)']];
+    const legendHtml = legend.map(([bg,c,l])=>`<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:8pt"><span style="width:14px;height:14px;background:${bg};border-radius:2px;display:inline-block"></span><span style="color:${c};font-weight:bold">${l}</span></span>`).join('');
+    return `<div style="margin-bottom:8px">${legendHtml}</div>
+      <div style="display:table;width:100%">
+        <div style="display:table-cell;padding-right:20px;vertical-align:top;width:50%">
+          ${buildTable(buildGrid(false),'⬛ Sebelum Pengendalian (Inherent Risk)')}
+        </div>
+        <div style="display:table-cell;vertical-align:top;width:50%">
+          ${buildTable(buildGrid(true),'✅ Setelah Pengendalian (Residual Risk)')}
+        </div>
+      </div>`;
+  }
+
+  const tabGenerators = [genIdentifikasi, genAnalisa, genEvaluasi, genPengendalian, genResidual, genMatrik];
+
+  // ── Susun HTML dokumen ─────────────────────────────
+  let body = '';
+  if (pkg) {
+    // Export tab aktif dari satu paket
+    body += `<h2>${pkg.icon} ${pkg.name} — Tab: ${tabLabel}</h2>`;
+    if (pkg.risks.length === 0) {
+      body += `<p style="color:#888;font-style:italic">Belum ada data risiko.</p>`;
+    } else {
+      body += tabGenerators[tabIdx](pkg);
+    }
+  } else {
+    // Dashboard — export semua paket, tab identifikasi sebagai ringkasan
+    Object.values(packages).forEach(p => {
+      body += `<h2>${p.icon} ${p.name}</h2>`;
+      body += p.risks.length === 0
+        ? `<p style="color:#888;font-style:italic">Belum ada data risiko.</p>`
+        : genIdentifikasi(p);
     });
+  }
 
-    html += `</tbody></table>`;
-  });
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>${CSS}</style></head><body>
+<h1>Laporan Manajemen Risiko BGTS 2026</h1>
+<p class="meta">Paket: ${pkgLabel} &nbsp;|&nbsp; Tab: ${tabLabel} &nbsp;|&nbsp; Dicetak: ${now} &nbsp;|&nbsp; Oleh: ${user} &nbsp;|&nbsp; Direktorat Jenderal Bina Marga – BGTS</p>
+${body}
+</body></html>`;
 
-  html += `</body></html>`;
-
-  // Download sebagai .html yang bisa dibuka di Word
   const blob = new Blob([html], { type: 'application/msword;charset=utf-8' });
   const a    = document.createElement('a');
-  const pkgLabel = (currentPage && packages[currentPage]) ? ('_' + currentPage) : '_Semua';
+  const fname = `ManRisk_BGTS_${(pkg?pkg.id:'Semua')}_${tabLabel}_${new Date().toISOString().slice(0,10)}.doc`;
   a.href     = URL.createObjectURL(blob);
-  a.download = `ManRisk_BGTS${pkgLabel}_${new Date().toISOString().slice(0,10)}.doc`;
+  a.download = fname;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  showToast('📄 File Word berhasil diunduh! Buka di Microsoft Word.');
+  showToast(`📄 Word berhasil diunduh: ${fname}`);
 }
 
 // ══ SYNC STATUS ═══════════════════════════════════════
 let _unsavedChanges = false;
 
 function setSyncState(state) {
-  // state: 'synced' | 'unsynced' | 'syncing' | 'offline'
+  // Indikator tersembunyi — hanya tampil saat syncing (animasi singkat)
   const ind   = document.getElementById('sync-indicator');
   const label = document.getElementById('sync-label');
-  if(!ind||!label) return;
-  const labels = { synced:'✓ Tersimpan', unsynced:'⚠ Belum disimpan', syncing:'↑ Menyimpan...', offline:'— Offline' };
-  ind.className   = state;
-  label.textContent = labels[state] || state;
+  if (ind) {
+    if (state === 'syncing') {
+      ind.style.display = '';
+      ind.className = 'syncing';
+      if (label) label.textContent = '↑ Menyimpan...';
+    } else {
+      // Sembunyikan kembali setelah selesai
+      setTimeout(() => { if (ind) ind.style.display = 'none'; }, 1500);
+      ind.className = state;
+      if (label) label.textContent = state === 'synced' ? '✓ Tersimpan' : '';
+    }
+  }
   _unsavedChanges = (state === 'unsynced');
 }
 
 function markUnsaved() {
-  if(document.getElementById('btn-gs-save')?.style.display !== 'none') {
-    setSyncState('unsynced');
+  // Auto-save langsung saat ada perubahan (tidak perlu klik Simpan manual)
+  if (sbUser && document.getElementById('btn-gs-save')?.style.display !== 'none') {
+    // Trigger auto-save dengan debounce 500ms
+    clearTimeout(markUnsaved._timer);
+    markUnsaved._timer = setTimeout(() => gsSaveAll(), 500);
   }
 }
+markUnsaved._timer = null;
 
-// Warn sebelum keluar jika ada perubahan belum tersimpan
-window.addEventListener('beforeunload', (e) => {
-  if(_unsavedChanges) {
-    e.preventDefault();
-    e.returnValue = 'Ada perubahan yang belum disimpan ke Supabase. Yakin mau keluar?';
-    return e.returnValue;
-  }
-});
+// Auto-save aktif — tidak perlu peringatan sebelum keluar
 
 // ══ HAPUS PAKET KEGIATAN ════════════════════════════════
 let _delPkgTarget = null;
