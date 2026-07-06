@@ -130,6 +130,22 @@ body {
 .nav-item:hover .nav-del-pkg-btn { color:#f87171; background:rgba(239,68,68,0.2); }
 .nav-add-btn:hover { background:var(--accent2); color:#000; border-color:var(--accent2); }
 
+.pkg-ctx-menu {
+  position:fixed; z-index:500; min-width:170px;
+  background:var(--bg-card,#1a1f2e); border:1px solid var(--border-bright);
+  border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  padding:5px; display:none; font-size:13px;
+}
+.pkg-ctx-menu.open { display:block; }
+.pkg-ctx-item {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 10px; border-radius:5px; cursor:pointer;
+  color: var(--text-sub);
+  transition: all 0.12s;
+}
+.pkg-ctx-item:hover { background:var(--bg-hover); color:var(--text-main); }
+.pkg-ctx-item.danger:hover { background:rgba(239,68,68,0.15); color:#f87171; }
+
 .sidebar-footer {
   margin-top:auto;
   padding:16px 18px;
@@ -1157,6 +1173,31 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
   <!-- V5-9 FIX: div ini wajib ada agar buildPkgPage() berfungsi -->
   <div id="pkg-pages"></div>
 
+<div class="pkg-ctx-menu" id="pkg-ctx-menu">
+  <div class="pkg-ctx-item" id="pkg-ctx-rename">✏️ Ubah Nama Paket</div>
+</div>
+
+<div class="modal-overlay" id="rename-pkg-modal" onclick="if(event.target===this)closeModal('rename-pkg-modal')">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">✏️ Ubah Nama Paket Kegiatan</span>
+      <button class="modal-close" onclick="closeModal('rename-pkg-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rn-pkg-id">
+      <div class="form-group">
+        <label class="form-label">Kode Paket</label>
+        <input class="form-input" id="rn-pkg-code" disabled>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Paket</label>
+        <input class="form-input" id="rn-pkg-name" placeholder="Nama lengkap paket kegiatan">
+      </div>
+      <button class="topbar-action btn-primary" style="width:100%;justify-content:center" onclick="doRenamePkg()">Simpan Perubahan</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="add-pkg-modal" onclick="if(event.target===this)closeModal('add-pkg-modal')">
   <div class="modal">
     <div class="modal-head">
@@ -1420,7 +1461,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-16 (2026-06-12)
+//  VERSI: v5-17 (2026-07-06) — Tambah fitur klik-kanan "Ubah Nama Paket"
 //  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
 //           sebelum data selesai dimuat (skipSync=true pada semua jalur login)
 //  CHANGES: warna matrik Word & Print pakai inline style (bukan CSS class)
@@ -2804,6 +2845,7 @@ function buildPkgNav() {
     d.id = 'nav-'+p.id;
     d.innerHTML = `<span class="nav-icon">${p.icon}</span><span class="nav-label">${p.name}</span><span class="nav-badge">${p.risks.length}</span><button class="nav-add-btn" title="Tambah Risiko" onclick="event.stopPropagation();openAddRisk('${p.id}')">+</button><button class="nav-del-pkg-btn" title="Hapus Paket Kegiatan ini" onclick="event.stopPropagation();confirmDeletePkg('${p.id}')">🗑</button>`;
     d.addEventListener('click', ()=>showPkg(p.id));
+    d.addEventListener('contextmenu', (e)=>openPkgCtxMenu(e, p.id));
     nav.appendChild(d);
   });
 }
@@ -4126,6 +4168,90 @@ function markUnsaved() {
 markUnsaved._timer = null;
 
 // Auto-save aktif — tidak perlu peringatan sebelum keluar
+
+// ══ CONTEXT MENU (Klik Kanan Paket) ═════════════════════
+let _ctxMenuPkgId = null;
+
+function openPkgCtxMenu(e, pkgId) {
+  e.preventDefault();
+  e.stopPropagation();
+  _ctxMenuPkgId = pkgId;
+  const menu = document.getElementById('pkg-ctx-menu');
+  // Posisikan menu di titik klik, jaga agar tidak keluar layar
+  const mw = 180, mh = 46;
+  let x = e.clientX, y = e.clientY;
+  if (x + mw > window.innerWidth)  x = window.innerWidth  - mw - 8;
+  if (y + mh > window.innerHeight) y = window.innerHeight - mh - 8;
+  menu.style.left = x + 'px';
+  menu.style.top  = y + 'px';
+  menu.classList.add('open');
+}
+
+function closePkgCtxMenu() {
+  document.getElementById('pkg-ctx-menu').classList.remove('open');
+}
+
+document.addEventListener('click', closePkgCtxMenu);
+document.addEventListener('contextmenu', (e) => {
+  // Tutup menu jika klik-kanan di luar nav-item paket
+  if (!e.target.closest('.nav-item')) closePkgCtxMenu();
+});
+
+document.getElementById('pkg-ctx-rename').addEventListener('click', () => {
+  const pkgId = _ctxMenuPkgId;
+  closePkgCtxMenu();
+  if (pkgId) openRenamePkgModal(pkgId);
+});
+
+// ══ UBAH NAMA PAKET KEGIATAN ════════════════════════════
+function openRenamePkgModal(pkgId) {
+  const pkg = packages[pkgId];
+  if (!pkg) return;
+  document.getElementById('rn-pkg-id').value   = pkgId;
+  document.getElementById('rn-pkg-code').value = pkgId;
+  document.getElementById('rn-pkg-name').value = pkg.name;
+  document.getElementById('rename-pkg-modal').classList.add('open');
+  setTimeout(() => document.getElementById('rn-pkg-name').focus(), 50);
+}
+
+async function doRenamePkg() {
+  const pkgId   = document.getElementById('rn-pkg-id').value;
+  const newName = document.getElementById('rn-pkg-name').value.trim();
+  const pkg = packages[pkgId];
+  if (!pkg) return;
+  if (!newName) return alert('Nama paket tidak boleh kosong!');
+
+  const oldName = pkg.name;
+  if (newName === oldName) { closeModal('rename-pkg-modal'); return; }
+
+  // 1. Update lokal (langsung terlihat)
+  pkg.name = newName;
+  buildPkgNav();
+  const existingPage = document.getElementById('page-' + pkgId);
+  if (existingPage) existingPage.remove();
+  buildPkgPage(pkgId);
+  if (currentPage === pkgId) showPkg(pkgId);
+  cacheLocalData();
+  closeModal('rename-pkg-modal');
+  showToast('✏️ Nama paket diperbarui: ' + newName);
+
+  // 2. Sync ke Supabase — update tabel packages DAN kolom pkg_name
+  //    yang ter-duplikasi di setiap baris tabel risks milik paket ini.
+  if (sbUser) {
+    try {
+      setSyncState('syncing');
+      await SB.patch('packages', `id=eq.${encodeURIComponent(pkgId)}`, { name: newName });
+      if (pkg.risks && pkg.risks.length) {
+        await SB.patch('risks', `pkg_id=eq.${encodeURIComponent(pkgId)}`, { pkg_name: newName });
+      }
+      sbAuditLog('RENAME_PKG', null, pkgId, { name: oldName }, { name: newName });
+      setSyncState('synced');
+    } catch (e) {
+      showToast('⚠️ Nama tersimpan lokal, sync ke Supabase gagal: ' + e.message, 4000);
+      console.error('[SB RenamePkg]', e);
+    }
+  }
+}
 
 // ══ HAPUS PAKET KEGIATAN ════════════════════════════════
 let _delPkgTarget = null;
