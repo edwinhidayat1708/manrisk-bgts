@@ -1461,7 +1461,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-17 (2026-07-06) — Tambah fitur klik-kanan "Ubah Nama Paket"
+//  VERSI: v5-18 (2026-07-07) — Fix: cegah kehilangan data saat logout/tutup tab sebelum autosave selesai
 //  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
 //           sebelum data selesai dimuat (skipSync=true pada semua jalur login)
 //  CHANGES: warna matrik Word & Print pakai inline style (bukan CSS class)
@@ -1821,6 +1821,19 @@ async function gsDoSignup() {
 }
 
 async function gsLogout() {
+  // ── PENTING: Pastikan autosave yang masih tertunda (debounce) selesai
+  //    dikirim ke Supabase DULU sebelum kita hapus sesi & cache lokal.
+  //    Tanpa ini, perubahan yang baru diketik bisa hilang permanen kalau
+  //    user langsung logout dalam 500ms setelah mengetik.
+  if (markUnsaved._timer) {
+    clearTimeout(markUnsaved._timer);
+    markUnsaved._timer = null;
+    if (sbUser) {
+      showToast('☁️ Menyimpan perubahan terakhir sebelum logout...', 2000);
+      await gsSaveAll().catch(() => {});
+    }
+  }
+
   if (_sbSession) {
     await SBAuth.signOut(_sbSession.access_token).catch(() => {});
     _sbSession = null;
@@ -4154,7 +4167,7 @@ function setSyncState(state) {
       if (label) label.textContent = state === 'synced' ? '✓ Tersimpan' : '';
     }
   }
-  _unsavedChanges = (state === 'unsynced');
+  _unsavedChanges = (state === 'unsynced' || state === 'syncing');
 }
 
 function markUnsaved() {
@@ -4167,7 +4180,15 @@ function markUnsaved() {
 }
 markUnsaved._timer = null;
 
-// Auto-save aktif — tidak perlu peringatan sebelum keluar
+// Peringatkan pengguna jika menutup tab/browser saat masih ada perubahan
+// yang belum selesai terkirim ke Supabase (autosave masih tertunda / sedang jalan).
+window.addEventListener('beforeunload', function (e) {
+  if (_unsavedChanges || markUnsaved._timer) {
+    e.preventDefault();
+    e.returnValue = 'Ada perubahan yang belum tersimpan ke server. Yakin ingin menutup halaman?';
+    return e.returnValue;
+  }
+});
 
 // ══ CONTEXT MENU (Klik Kanan Paket) ═════════════════════
 let _ctxMenuPkgId = null;
