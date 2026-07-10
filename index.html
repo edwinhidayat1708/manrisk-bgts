@@ -91,6 +91,30 @@ body {
   background: rgba(0,207,255,0.04);
 }
 
+.pkg-group-header {
+  display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;
+}
+.pkg-group-header:hover { color: var(--accent2); }
+.pkg-group-toggle {
+  display:inline-block; font-size:10px; transition: transform 0.15s;
+}
+.pkg-group-toggle.collapsed { transform: rotate(-90deg); }
+.pkg-group-count {
+  margin-left:auto; font-size:9px; opacity:0.7; letter-spacing:0;
+}
+.pkg-nav-group.collapsed { display:none; }
+
+.dash-filter-bar {
+  display:flex; gap:8px; margin-bottom:16px;
+}
+.dash-filter-btn {
+  padding:7px 14px; border-radius:999px; font-size:12px; font-weight:600;
+  border:1px solid var(--border-bright); background:transparent; color:var(--text-sub);
+  cursor:pointer; transition: all 0.15s;
+}
+.dash-filter-btn:hover { border-color:var(--accent); color:var(--text-main); }
+.dash-filter-btn.active { background:var(--accent); color:#001018; border-color:var(--accent); }
+
 .nav-item {
   display:flex; align-items:center; gap:10px;
   padding: 11px 18px;
@@ -954,8 +978,19 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     <span class="nav-label">Backup &amp; Restore</span>
   </div>
 
-  <div class="sidebar-section">Paket Kegiatan</div>
-  <div id="pkg-nav"></div>
+  <div class="sidebar-section pkg-group-header" onclick="togglePkgGroup('utama')">
+    <span class="pkg-group-toggle" id="grp-toggle-utama">▾</span>
+    <span>📁 Paket Kegiatan</span>
+    <span class="pkg-group-count" id="grp-count-utama"></span>
+  </div>
+  <div id="pkg-nav-utama" class="pkg-nav-group"></div>
+
+  <div class="sidebar-section pkg-group-header" onclick="togglePkgGroup('pendukung')">
+    <span class="pkg-group-toggle" id="grp-toggle-pendukung">▾</span>
+    <span>🧩 Paket Pendukung</span>
+    <span class="pkg-group-count" id="grp-count-pendukung"></span>
+  </div>
+  <div id="pkg-nav-pendukung" class="pkg-nav-group"></div>
 
   <div class="sidebar-footer">
     <div style="margin-bottom:6px">
@@ -1037,6 +1072,11 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 
     <!-- Data wrap: hanya tampil jika sudah login -->
     <div id="dash-data-wrap">
+      <div class="dash-filter-bar">
+        <button class="dash-filter-btn active" id="df-semua" onclick="setDashFilter('semua')">🗂 Semua Paket</button>
+        <button class="dash-filter-btn" id="df-utama" onclick="setDashFilter('utama')">📁 Paket Kegiatan</button>
+        <button class="dash-filter-btn" id="df-pendukung" onclick="setDashFilter('pendukung')">🧩 Paket Pendukung</button>
+      </div>
       <div class="stat-grid" id="stat-grid"></div>
 
       <div class="dash-grid">
@@ -1175,6 +1215,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 
 <div class="pkg-ctx-menu" id="pkg-ctx-menu">
   <div class="pkg-ctx-item" id="pkg-ctx-rename">✏️ Ubah Nama Paket</div>
+  <div class="pkg-ctx-item" id="pkg-ctx-move">🔀 Pindah Grup</div>
 </div>
 
 <div class="modal-overlay" id="rename-pkg-modal" onclick="if(event.target===this)closeModal('rename-pkg-modal')">
@@ -1216,6 +1257,13 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
       <div class="form-group">
         <label class="form-label">Anggaran (Rp)</label>
         <input class="form-input" id="np-budget" type="number" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kategori</label>
+        <select class="form-input" id="np-kategori">
+          <option value="utama">📁 Paket Kegiatan</option>
+          <option value="pendukung">🧩 Paket Pendukung</option>
+        </select>
       </div>
       <button class="topbar-action btn-primary" style="width:100%;justify-content:center" onclick="doAddPkg()">Tambah Paket</button>
     </div>
@@ -1461,7 +1509,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-18 (2026-07-07) — Fix: cegah kehilangan data saat logout/tutup tab sebelum autosave selesai
+//  VERSI: v5-19 (2026-07-10) — Grup Paket Kegiatan vs Paket Pendukung + filter dashboard
 //  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
 //           sebelum data selesai dimuat (skipSync=true pada semua jalur login)
 //  CHANGES: warna matrik Word & Print pakai inline style (bukan CSS class)
@@ -1933,12 +1981,12 @@ async function sbLoadAll() {
     Object.keys(packages).forEach(k => delete packages[k]);
 
     pkgRows.forEach(p => {
-      packages[p.id] = { id: p.id, name: p.name, icon: p.icon||'📁', anggaran: parseFloat(p.anggaran)||0, risks: [] };
+      packages[p.id] = { id: p.id, name: p.name, icon: p.icon||'📁', anggaran: parseFloat(p.anggaran)||0, kategori: p.kategori||'utama', risks: [] };
     });
 
     riskRows.forEach(row => {
       if (!packages[row.pkg_id]) {
-        packages[row.pkg_id] = { id: row.pkg_id, name: row.pkg_name||row.pkg_id, icon:'📁', anggaran:0, risks:[] };
+        packages[row.pkg_id] = { id: row.pkg_id, name: row.pkg_name||row.pkg_id, icon:'📁', anggaran:0, kategori:'utama', risks:[] };
       }
       packages[row.pkg_id].risks.push(rowToRisk(row));
     });
@@ -2282,9 +2330,12 @@ let packages = {};
 //  HELPERS
 
 //  HELPERS
-function allRisks() {
+function allRisks(kategoriFilter) {
   const out = [];
-  Object.values(packages).forEach(p=>p.risks.forEach(r=>out.push({...r,_pkg:p})));
+  Object.values(packages).forEach(p=>{
+    if (kategoriFilter && kategoriFilter!=='semua' && (p.kategori||'utama')!==kategoriFilter) return;
+    p.risks.forEach(r=>out.push({...r,_pkg:p}));
+  });
   return out;
 }
 function getBobot(r)    { return (r.nilai_k||1)*(r.nilai_d||1); }
@@ -2743,6 +2794,16 @@ function renderMatrik(pkg) {
 }
 
 //  DASHBOARD
+// ══ FILTER DASHBOARD (Semua / Paket Kegiatan / Paket Pendukung) ═══
+let _dashFilter = 'semua';
+function setDashFilter(val) {
+  _dashFilter = val;
+  ['semua','utama','pendukung'].forEach(k=>{
+    document.getElementById('df-'+k).classList.toggle('active', k===val);
+  });
+  renderDashboard();
+}
+
 function renderDashboard() {
   // ── Jika belum login, sembunyikan data & tampilkan banner ──
   const dashDataWrap = document.getElementById('dash-data-wrap');
@@ -2760,20 +2821,23 @@ function renderDashboard() {
   if (dashDataWrap)    dashDataWrap.style.display    = '';
   if (dashLoginBanner) dashLoginBanner.style.display = 'none';
 
-  const ar = allRisks();
+  const filterVal = _dashFilter || 'semua';
+  const filteredPkgs = Object.values(packages).filter(p => filterVal==='semua' || (p.kategori||'utama')===filterVal);
+
+  const ar = allRisks(filterVal);
   const totalBobot = ar.reduce((s,r)=>s+getBobot(r),0);
   const totalEMV   = ar.reduce((s,r)=>s+getEMV(r),0);
   const totalRes   = ar.reduce((s,r)=>s+getBobotRes(r),0);
   const reduksiPct = totalBobot>0?((totalBobot-totalRes)/totalBobot*100).toFixed(1):0;
 
   document.getElementById('stat-grid').innerHTML = `
-    <div class="stat-card gold"><div class="stat-val">${ar.length}</div><div class="stat-label">Total Risiko</div><div class="stat-sub">${Object.keys(packages).length} Paket Kegiatan</div><div class="stat-icon">🛡️</div></div>
+    <div class="stat-card gold"><div class="stat-val">${ar.length}</div><div class="stat-label">Total Risiko</div><div class="stat-sub">${filteredPkgs.length} Paket Kegiatan</div><div class="stat-icon">🛡️</div></div>
     <div class="stat-card teal"><div class="stat-val">${totalBobot}</div><div class="stat-label">Total Bobot Inherent</div><div class="stat-sub">Rata-rata ${(totalBobot/Math.max(1,ar.length)).toFixed(1)} per risiko</div><div class="stat-icon">⚠️</div></div>
     <div class="stat-card green"><div class="stat-val">${reduksiPct}%</div><div class="stat-label">Reduksi Bobot Risiko</div><div class="stat-sub">Inherent → Residual</div><div class="stat-icon">📉</div></div>
     <div class="stat-card red"><div class="stat-val" style="font-size:16px">${fmt(totalEMV)}</div><div class="stat-label">Total EMV / Financial Loss</div><div class="stat-sub">${(totalEMV/PAGU*100).toFixed(3)}% dari Pagu BGTS</div><div class="stat-icon">💰</div></div>`;
 
   // Per-pkg table
-  document.getElementById('dash-pkg-tbl').innerHTML = Object.values(packages).map(p=>{
+  document.getElementById('dash-pkg-tbl').innerHTML = filteredPkgs.map(p=>{
     const maxB = p.risks.length?Math.max(...p.risks.map(r=>getBobot(r))):0;
     const emv  = p.risks.reduce((s,r)=>s+getEMV(r),0);
     const bc = bobotColor(maxB);
@@ -2841,26 +2905,60 @@ function renderMatrikRef() {
   document.getElementById('matrix-ref-tbl').innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
 }
 
-//  PKG NAV (sidebar)
+//  PKG NAV (sidebar) — dibagi 2 grup: utama (Paket Kegiatan) & pendukung (Paket Pendukung)
+let _pkgGroupCollapsed = JSON.parse(localStorage.getItem('manrisk-pkg-group-collapsed') || '{}');
+
+function togglePkgGroup(grp) {
+  _pkgGroupCollapsed[grp] = !_pkgGroupCollapsed[grp];
+  localStorage.setItem('manrisk-pkg-group-collapsed', JSON.stringify(_pkgGroupCollapsed));
+  applyPkgGroupCollapseUI();
+}
+
+function applyPkgGroupCollapseUI() {
+  ['utama','pendukung'].forEach(grp => {
+    const collapsed = !!_pkgGroupCollapsed[grp];
+    document.getElementById('pkg-nav-'+grp).classList.toggle('collapsed', collapsed);
+    document.getElementById('grp-toggle-'+grp).classList.toggle('collapsed', collapsed);
+  });
+}
+
+function buildPkgNavItem(p) {
+  const d = document.createElement('div');
+  d.className = 'nav-item';
+  d.id = 'nav-'+p.id;
+  d.innerHTML = `<span class="nav-icon">${p.icon}</span><span class="nav-label">${p.name}</span><span class="nav-badge">${p.risks.length}</span><button class="nav-add-btn" title="Tambah Risiko" onclick="event.stopPropagation();openAddRisk('${p.id}')">+</button><button class="nav-del-pkg-btn" title="Hapus Paket Kegiatan ini" onclick="event.stopPropagation();confirmDeletePkg('${p.id}')">🗑</button>`;
+  d.addEventListener('click', ()=>showPkg(p.id));
+  d.addEventListener('contextmenu', (e)=>openPkgCtxMenu(e, p.id));
+  return d;
+}
+
 function buildPkgNav() {
-  const nav = document.getElementById('pkg-nav');
-  nav.innerHTML = '';
+  const navUtama     = document.getElementById('pkg-nav-utama');
+  const navPendukung = document.getElementById('pkg-nav-pendukung');
+  navUtama.innerHTML = '';
+  navPendukung.innerHTML = '';
 
   // Jika belum login, tampilkan pesan di sidebar
   if (!sbUser) {
-    nav.innerHTML = `<div style="padding:12px 18px;font-size:11px;color:var(--text-label);line-height:1.6">🔒 Login untuk melihat paket kegiatan</div>`;
+    navUtama.innerHTML = `<div style="padding:12px 18px;font-size:11px;color:var(--text-label);line-height:1.6">🔒 Login untuk melihat paket kegiatan</div>`;
+    document.getElementById('grp-count-utama').textContent = '';
+    document.getElementById('grp-count-pendukung').textContent = '';
     return;
   }
 
+  let cntUtama = 0, cntPendukung = 0;
   Object.values(packages).forEach(p=>{
-    const d = document.createElement('div');
-    d.className = 'nav-item';
-    d.id = 'nav-'+p.id;
-    d.innerHTML = `<span class="nav-icon">${p.icon}</span><span class="nav-label">${p.name}</span><span class="nav-badge">${p.risks.length}</span><button class="nav-add-btn" title="Tambah Risiko" onclick="event.stopPropagation();openAddRisk('${p.id}')">+</button><button class="nav-del-pkg-btn" title="Hapus Paket Kegiatan ini" onclick="event.stopPropagation();confirmDeletePkg('${p.id}')">🗑</button>`;
-    d.addEventListener('click', ()=>showPkg(p.id));
-    d.addEventListener('contextmenu', (e)=>openPkgCtxMenu(e, p.id));
-    nav.appendChild(d);
+    if ((p.kategori||'utama') === 'pendukung') {
+      navPendukung.appendChild(buildPkgNavItem(p));
+      cntPendukung++;
+    } else {
+      navUtama.appendChild(buildPkgNavItem(p));
+      cntUtama++;
+    }
   });
+  document.getElementById('grp-count-utama').textContent = cntUtama;
+  document.getElementById('grp-count-pendukung').textContent = cntPendukung;
+  applyPkgGroupCollapseUI();
 }
 
 //  APPROVAL TOGGLE
@@ -3116,17 +3214,18 @@ function doAddRisk() {
 }
 
 function doAddPkg() {
-  const code   = document.getElementById('np-code').value.trim().toUpperCase();
-  const name   = document.getElementById('np-name').value.trim();
-  const budget = parseFloat(document.getElementById('np-budget').value)||0;
+  const code     = document.getElementById('np-code').value.trim().toUpperCase();
+  const name     = document.getElementById('np-name').value.trim();
+  const budget   = parseFloat(document.getElementById('np-budget').value)||0;
+  const kategori = document.getElementById('np-kategori').value || 'utama';
   if(!code||!name) return alert('Kode dan nama wajib diisi!');
-  packages[code] = {id:code, name, icon:'📁', anggaran:budget, risks:[]};
+  packages[code] = {id:code, name, icon:'📁', anggaran:budget, kategori, risks:[]};
   buildPkgNav();
   closeModal('add-pkg-modal');
   showPkg(code);
   // Sync ke Supabase
   if (sbUser) {
-    SB.upsert('packages', {id:code, name, icon:'📁', anggaran:budget})
+    SB.upsert('packages', {id:code, name, icon:'📁', anggaran:budget, kategori})
       .then(() => showToast('✅ Paket ' + code + ' tersimpan ke Supabase'))
       .catch(e => showToast('⚠️ Paket tersimpan lokal, sync gagal: ' + e.message, 4000));
   }
@@ -4198,8 +4297,15 @@ function openPkgCtxMenu(e, pkgId) {
   e.stopPropagation();
   _ctxMenuPkgId = pkgId;
   const menu = document.getElementById('pkg-ctx-menu');
+  const pkg = packages[pkgId];
+  if (pkg) {
+    const isPendukung = (pkg.kategori||'utama') === 'pendukung';
+    document.getElementById('pkg-ctx-move').textContent = isPendukung
+      ? '🔀 Pindah ke Paket Kegiatan'
+      : '🔀 Pindah ke Paket Pendukung';
+  }
   // Posisikan menu di titik klik, jaga agar tidak keluar layar
-  const mw = 180, mh = 46;
+  const mw = 200, mh = 90;
   let x = e.clientX, y = e.clientY;
   if (x + mw > window.innerWidth)  x = window.innerWidth  - mw - 8;
   if (y + mh > window.innerHeight) y = window.innerHeight - mh - 8;
@@ -4223,6 +4329,38 @@ document.getElementById('pkg-ctx-rename').addEventListener('click', () => {
   closePkgCtxMenu();
   if (pkgId) openRenamePkgModal(pkgId);
 });
+
+document.getElementById('pkg-ctx-move').addEventListener('click', () => {
+  const pkgId = _ctxMenuPkgId;
+  closePkgCtxMenu();
+  if (pkgId) movePkgToGroup(pkgId);
+});
+
+// ══ PINDAH PAKET ANTAR GRUP (Kegiatan ⇄ Pendukung) ══════
+async function movePkgToGroup(pkgId) {
+  const pkg = packages[pkgId];
+  if (!pkg) return;
+  const oldKategori = pkg.kategori || 'utama';
+  const newKategori = oldKategori === 'pendukung' ? 'utama' : 'pendukung';
+  const label = newKategori === 'pendukung' ? 'Paket Pendukung' : 'Paket Kegiatan';
+
+  if (!confirm(`Pindahkan "${pkg.name}" ke grup ${label}?`)) return;
+
+  pkg.kategori = newKategori;
+  buildPkgNav();
+  cacheLocalData();
+  showToast(`🔀 "${pkg.name}" dipindah ke ${label}`);
+
+  if (sbUser) {
+    try {
+      await SB.patch('packages', `id=eq.${encodeURIComponent(pkgId)}`, { kategori: newKategori });
+      sbAuditLog('MOVE_PKG_GROUP', null, pkgId, { kategori: oldKategori }, { kategori: newKategori });
+    } catch (e) {
+      showToast('⚠️ Perubahan tersimpan lokal, sync ke Supabase gagal: ' + e.message, 4000);
+      console.error('[SB MovePkgGroup]', e);
+    }
+  }
+}
 
 // ══ UBAH NAMA PAKET KEGIATAN ════════════════════════════
 function openRenamePkgModal(pkgId) {
