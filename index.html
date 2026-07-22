@@ -1509,7 +1509,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-19 (2026-07-10) — Grup Paket Kegiatan vs Paket Pendukung + filter dashboard
+//  VERSI: v5-20 (2026-07-22) — Fix: SB.patch sekarang validasi baris benar-benar terupdate (deteksi RLS blocking silent-fail)
 //  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
 //           sebelum data selesai dimuat (skipSync=true pada semua jalur login)
 //  CHANGES: warna matrik Word & Print pakai inline style (bukan CSS class)
@@ -1618,7 +1618,15 @@ const SB = {
       body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    const result = await r.json();
+    // PENTING: Supabase/PostgREST bisa membalas 200 OK dengan array KOSONG
+    // kalau tidak ada baris yang cocok/diizinkan diupdate (misal RLS
+    // memblokir UPDATE walau SELECT diizinkan). Tanpa cek ini, kode akan
+    // mengira update berhasil padahal tidak ada perubahan tersimpan di server.
+    if (Array.isArray(result) && result.length === 0) {
+      throw new Error(`Update ke tabel "${table}" tidak mengubah data apapun — kemungkinan RLS (Row Level Security) belum mengizinkan UPDATE, atau filter (${filter}) tidak cocok dengan baris manapun.`);
+    }
+    return result;
   },
 
   async delete(table, filter) {
@@ -4356,7 +4364,7 @@ async function movePkgToGroup(pkgId) {
       await SB.patch('packages', `id=eq.${encodeURIComponent(pkgId)}`, { kategori: newKategori });
       sbAuditLog('MOVE_PKG_GROUP', null, pkgId, { kategori: oldKategori }, { kategori: newKategori });
     } catch (e) {
-      showToast('⚠️ Perubahan tersimpan lokal, sync ke Supabase gagal: ' + e.message, 4000);
+      showToast('⚠️ GAGAL sync ke Supabase (perubahan hanya lokal): ' + e.message, 7000);
       console.error('[SB MovePkgGroup]', e);
     }
   }
@@ -4406,7 +4414,7 @@ async function doRenamePkg() {
       sbAuditLog('RENAME_PKG', null, pkgId, { name: oldName }, { name: newName });
       setSyncState('synced');
     } catch (e) {
-      showToast('⚠️ Nama tersimpan lokal, sync ke Supabase gagal: ' + e.message, 4000);
+      showToast('⚠️ GAGAL sync ke Supabase (nama hanya berubah lokal): ' + e.message, 7000);
       console.error('[SB RenamePkg]', e);
     }
   }
