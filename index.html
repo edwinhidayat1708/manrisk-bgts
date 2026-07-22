@@ -484,6 +484,33 @@ tbody tr:nth-child(even):hover td:not(.matrix-cell) { background: var(--bg-hover
 
 /* ─── MODAL ──────────────────────────────────────── */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.82); display:none; align-items:center; justify-content:center; z-index:100; backdrop-filter:blur(4px); }
+
+/* ── TOAST NOTIFICATION ─────────────────────────── */
+#toast-container {
+  position:fixed; bottom:24px; right:24px; z-index:900;
+  display:flex; flex-direction:column; gap:10px;
+  pointer-events:none;
+}
+.toast {
+  pointer-events:auto;
+  background: var(--bg-card, #0d1a2e);
+  border: 1px solid var(--border-bright, #1e3a60);
+  border-left: 4px solid var(--accent, #00d8ff);
+  color: var(--text-main, #ddeeff);
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 380px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  opacity: 0;
+  transform: translateX(30px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.toast.show { opacity:1; transform:translateX(0); }
+.toast.toast-error { border-left-color: var(--danger, #ff3b3b); }
+.toast.toast-warn  { border-left-color: var(--warn, #ff8c00); }
+.toast.toast-success { border-left-color: var(--accent3, #00f080); }
 .modal-overlay.open { display:flex; }
 .modal {
   background: var(--bg-card);
@@ -1509,12 +1536,40 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-20 (2026-07-22) — Fix: SB.patch sekarang validasi baris benar-benar terupdate (deteksi RLS blocking silent-fail)
+//  VERSI: v5-21 (2026-07-22) — FIX KRITIS: fungsi showToast() ternyata TIDAK PERNAH
+//           didefinisikan sejak awal (v5-16), padahal dipanggil 25+ kali di seluruh
+//           aplikasi. Setiap pemanggilan showToast() menyebabkan crash (ReferenceError)
+//           dan menghentikan kode SETELAHNYA secara diam-diam — termasuk semua proses
+//           sync ke Supabase (pindah grup paket, rename, flush autosave sebelum logout,
+//           dll) yang kebetulan diletakkan SETELAH baris showToast(). Sekarang sudah
+//           diimplementasikan dengan benar (lihat #toast-container di CSS).
 //  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
 //           sebelum data selesai dimuat (skipSync=true pada semua jalur login)
-//  CHANGES: warna matrik Word & Print pakai inline style (bukan CSS class)
-//           sehingga warna tampil di Microsoft Word dan browser print
 //  CHANGES: versi dicatat di dalam kode HTML (title + comment JS)
+
+// ══ TOAST NOTIFICATION (sebelumnya dipanggil di 25+ tempat tapi TIDAK PERNAH ada) ══
+function showToast(message, duration = 3000) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const el = document.createElement('div');
+  el.className = 'toast';
+  if (message.startsWith('❌')) el.classList.add('toast-error');
+  else if (message.startsWith('⚠️')) el.classList.add('toast-warn');
+  else if (message.startsWith('✅') || message.startsWith('🎉')) el.classList.add('toast-success');
+  el.textContent = message;
+  container.appendChild(el);
+  // Trigger transisi masuk
+  requestAnimationFrame(() => el.classList.add('show'));
+  // Hapus otomatis setelah durasi selesai
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
 
 //  KONFIGURASI SUPABASE
 //  Ganti dua nilai di bawah dengan data dari project Supabase Anda
