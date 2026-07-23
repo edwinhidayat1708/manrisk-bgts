@@ -496,7 +496,7 @@ tbody tr:nth-child(even):hover td:not(.matrix-cell) { background: var(--bg-hover
   background: var(--bg-card, #0d1a2e);
   border: 1px solid var(--border-bright, #1e3a60);
   border-left: 4px solid var(--accent, #00d8ff);
-  color: var(--text-main, #ddeeff);
+  color: #ddeeff;
   padding: 12px 18px;
   border-radius: 8px;
   font-size: 13px;
@@ -1536,13 +1536,9 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-21 (2026-07-22) — FIX KRITIS: fungsi showToast() ternyata TIDAK PERNAH
-//           didefinisikan sejak awal (v5-16), padahal dipanggil 25+ kali di seluruh
-//           aplikasi. Setiap pemanggilan showToast() menyebabkan crash (ReferenceError)
-//           dan menghentikan kode SETELAHNYA secara diam-diam — termasuk semua proses
-//           sync ke Supabase (pindah grup paket, rename, flush autosave sebelum logout,
-//           dll) yang kebetulan diletakkan SETELAH baris showToast(). Sekarang sudah
-//           diimplementasikan dengan benar (lihat #toast-container di CSS).
+//  VERSI: v5-22 (2026-07-22) — Fix: teks toast tidak kelihatan di Mode Terang (light mode) —
+//           warna teks toast sebelumnya ikut variabel --text-main yang berubah gelap di
+//           light mode, padahal latar kotak toast selalu gelap. Sekarang warna teks dikunci.
 //  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
 //           sebelum data selesai dimuat (skipSync=true pada semua jalur login)
 //  CHANGES: versi dicatat di dalam kode HTML (title + comment JS)
