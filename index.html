@@ -443,6 +443,20 @@ tbody tr:nth-child(even):hover td:not(.matrix-cell) { background: var(--bg-hover
 .appr-toggle.appr-off { background:#3a0000; color:#ff5252; border-color:#880000; }
 .appr-toggle.appr-off:hover { background:#550000; }
 
+/* ─── CATATAN APPROVAL (per-tab notes) ───────────── */
+.catatan-input {
+  width:100%; min-width:150px; resize:vertical; min-height:44px;
+  background:rgba(255,255,255,0.04); color:var(--text-main);
+  border:1.5px solid var(--border); border-radius:6px;
+  padding:6px 8px; font-size:11px; line-height:1.4;
+  font-family:'DM Sans',sans-serif;
+}
+.catatan-input:focus { outline:none; border-color:var(--accent2); background:rgba(232,160,32,0.06); }
+.catatan-input::placeholder { color:var(--text-sub); opacity:0.7; }
+body.light-mode .catatan-input { background:#f9fafb; border-color:#d1d5db; color:#111827; }
+body.light-mode .catatan-input:focus { background:#fff; border-color:#d97706; }
+body.light-mode .catatan-input::placeholder { color:#9ca3af; }
+
 /* ─── ROW ACTION BUTTONS ─────────────────────────── */
 .row-edit-btn {
   padding:4px 10px; border-radius:5px; cursor:pointer;
@@ -1144,7 +1158,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
   <!-- ── MATRIX REFERENCE ── -->
   <div id="page-matrik-ref" class="page">
     <div class="section-heading">Risk Matrix Referensi</div>
-    <div class="section-sub">SE Menteri PUPR 12/2024 — Bobot = Nilai K × Nilai D</div>
+    <div class="section-sub">SE Menteri PUPR 12/2024 — Tabel 10: Matriks Analisis Risiko (Risiko Pemerintahan)</div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
       <div class="card" style="margin:0">
@@ -1156,6 +1170,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
             <div class="legend-item"><div class="legend-dot" style="background:#b58a00;border:1.5px solid #e8b000"></div><span class="legend-label legend-s">Sedang (11–15)</span></div>
             <div class="legend-item"><div class="legend-dot" style="background:#c05a00;border:1.5px solid #f07820"></div><span class="legend-label legend-t">Tinggi (16–19)</span></div>
             <div class="legend-item"><div class="legend-dot" style="background:#9a0000;border:1.5px solid #cc2020"></div><span class="legend-label legend-st">Sangat Tinggi (20–25)</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div><span class="legend-label" style="color:#c4b5fd">Garis Toleransi</span></div>
           </div>
           <div class="matrix-wrap"><table id="matrix-ref-tbl" class="matrix-table"></table></div>
         </div>
@@ -1536,7 +1551,8 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-22 (2026-07-22) — Fix: teks toast tidak kelihatan di Mode Terang (light mode) —
+//  VERSI: v5-23 (2026-07-25) — Catatan approval per-tab (Tatalaksana/Akuntabilitas/Pengawasan),
+//  hapus approval Residual, Matriks Risiko disesuaikan SE Menteri PUPR 12/2024 + Garis Toleransi —
 //           warna teks toast sebelumnya ikut variabel --text-main yang berubah gelap di
 //           light mode, padahal latar kotak toast selalu gelap. Sekarang warna teks dikunci.
 //  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
@@ -1734,6 +1750,7 @@ function riskToRow(r, pkgId) {
     pengendalian_ada: r.pengendalian_ada || '',
     hasil:            r.hasil            || 'Belum Memadai',
     appr_ident:       !!r.appr_ident,
+    catatan_ident:    r.catatan_ident    || '',
     analisis_k:       r.analisis_k       || '',
     prob_val:         parseFloat(r.prob_val)  || 0.1,
     nilai_k:          parseInt(r.nilai_k)     || 2,
@@ -1741,12 +1758,15 @@ function riskToRow(r, pkgId) {
     nilai_d:          parseInt(r.nilai_d)     || 3,
     fin_bench:        parseFloat(r.fin_bench) || 226207000,
     appr_analisa:     !!r.appr_analisa,
+    catatan_analisa:  r.catatan_analisa  || '',
     respon:           r.respon           || '',
     appr_eval:        !!r.appr_eval,
+    catatan_eval:     r.catatan_eval     || '',
     jenis:            r.jenis            || '',
     rtp:              r.rtp              || '',
     sumber:           r.sumber           || '',
     appr_kend:        !!r.appr_kend,
+    catatan_kend:     r.catatan_kend     || '',
     analisis_k_res:   r.analisis_k_res   || '',
     prob_res:         parseFloat(r.prob_res)  || 0.05,
     nilai_k_res:      parseInt(r.nilai_k_res) || 1,
@@ -1772,6 +1792,7 @@ function rowToRisk(row) {
     pengendalian_ada: row.pengendalian_ada || '',
     hasil:            row.hasil            || 'Belum Memadai',
     appr_ident:       row.appr_ident === true,
+    catatan_ident:    row.catatan_ident    || '',
     analisis_k:       row.analisis_k       || '',
     prob_val:         parseFloat(row.prob_val)  || 0.1,
     nilai_k:          parseInt(row.nilai_k)     || 2,
@@ -1779,12 +1800,15 @@ function rowToRisk(row) {
     nilai_d:          parseInt(row.nilai_d)     || 3,
     fin_bench:        parseFloat(row.fin_bench) || 226207000,
     appr_analisa:     row.appr_analisa === true,
+    catatan_analisa:  row.catatan_analisa  || '',
     respon:           row.respon           || '',
     appr_eval:        row.appr_eval === true,
+    catatan_eval:     row.catatan_eval     || '',
     jenis:            row.jenis            || '',
     rtp:              row.rtp              || '',
     sumber:           row.sumber           || '',
     appr_kend:        row.appr_kend === true,
+    catatan_kend:     row.catatan_kend     || '',
     analisis_k_res:   row.analisis_k_res   || '',
     prob_res:         parseFloat(row.prob_res)  || 0.05,
     nilai_k_res:      parseInt(row.nilai_k_res) || 1,
@@ -2206,6 +2230,39 @@ async function toggleAppr(pkgId, rIdx, field, btn) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  CATATAN APPROVAL (per-tab) — langsung sync ke Supabase
+// ═══════════════════════════════════════════════════════
+async function saveCatatan(pkgId, rIdx, field, el) {
+  const r = packages[pkgId]?.risks[rIdx];
+  if (!r) return;
+
+  const oldVal = r[field] || '';
+  const newVal = el.value;
+  if (oldVal === newVal) return;
+  r[field] = newVal;
+
+  cacheLocalData();
+  markUnsaved();
+
+  if (sbUser) {
+    try {
+      await SB.patch('risks',
+        `id=eq.${encodeURIComponent(r.id)}&pkg_id=eq.${encodeURIComponent(pkgId)}`,
+        { [field]: newVal }
+      );
+      sbAuditLog('UPDATE', r.id, pkgId, { [field]: oldVal }, { [field]: newVal });
+      setSyncState('synced');
+      showToast('💾 Catatan disimpan', 1500);
+    } catch(e) {
+      r[field] = oldVal;
+      el.value = oldVal;
+      showToast('❌ Gagal menyimpan catatan: ' + e.message, 4000);
+      console.error('[SB Catatan]', e);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 //  BACKUP PAGE — Diganti dengan Audit Log viewer
 // ═══════════════════════════════════════════════════════
 async function initBackupPage() {
@@ -2383,6 +2440,40 @@ function fmt(n) { return 'Rp '+Math.round(n).toLocaleString('id-ID'); }
 function fmtPct(n) { return (n*100).toFixed(3)+'%'; }
 function mcClass(n) { return `mc-${Math.min(25,Math.max(1,n))}`; }
 
+// ─── MATRIKS RISIKO PEMERINTAHAN (SE Menteri PUPR 12/2024) ──────────
+// Nilai sel matriks 5x5 TIDAK sama dengan perkalian K×D biasa (kondisi umum),
+// melainkan tabel skala keparahan (severity ranking) khusus risiko pemerintahan,
+// sesuai Tabel 10: Matriks Analisis Risiko pada lampiran SE Menteri PUPR 12/2024.
+// Index array: [Nilai K - 1][Nilai D - 1] → nilai gabungan (1–25, tanpa duplikat).
+const GOV_MATRIX_VALUE = [
+  /* K=1 */ [1, 3, 5, 9, 20],
+  /* K=2 */ [2, 7, 10, 13, 21],
+  /* K=3 */ [4, 8, 14, 17, 22],
+  /* K=4 */ [6, 12, 16, 19, 24],
+  /* K=5 */ [11, 15, 18, 23, 25],
+];
+function govMatrixValue(k, d) {
+  const ki = Math.min(5, Math.max(1, k||1)) - 1;
+  const di = Math.min(5, Math.max(1, d||1)) - 1;
+  return GOV_MATRIX_VALUE[ki][di];
+}
+// Zona toleransi = sel dengan nilai ≤10 (kategori Sangat Rendah + Rendah)
+function inGovTolerance(k, d) { return govMatrixValue(k, d) <= 10; }
+// Menghitung border "Garis Toleransi" (ungu) di sekeliling batas zona toleransi.
+// ri/ci: indeks baris/kolom tabel (ri=0 → K=5 di baris paling atas, ci=0 → D=1 di kolom paling kiri)
+function govToleranceBorder(ri, ci) {
+  const kOf = r => 5 - r, dOf = c => c + 1;
+  const here = inGovTolerance(kOf(ri), dOf(ci));
+  const GT = '3px solid #7c3aed';
+  const styles = [];
+  if (ri > 0 && inGovTolerance(kOf(ri-1), dOf(ci)) !== here) styles.push(`border-top:${GT}`);
+  if (ri < 4 && inGovTolerance(kOf(ri+1), dOf(ci)) !== here) styles.push(`border-bottom:${GT}`);
+  if (ci > 0 && inGovTolerance(kOf(ri), dOf(ci-1)) !== here) styles.push(`border-left:${GT}`);
+  if (ci < 4 && inGovTolerance(kOf(ri), dOf(ci+1)) !== here) styles.push(`border-right:${GT}`);
+  return styles.join(';');
+}
+function escTa(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 let packages = {};
 // Data dimuat dari Supabase saat login — tidak ada data dummy lokal
 
@@ -2543,8 +2634,12 @@ function renderIdent(pkg) {
         ${r.appr_ident?'✓ Approved':'— Belum'}
       </button>
     </td>
+    <td>
+      <textarea class="catatan-input" rows="2" placeholder="Catatan Pokja Tatalaksana..."
+        onblur="saveCatatan('${pkg.id}',${i},'catatan_ident',this)">${escTa(r.catatan_ident)}</textarea>
+    </td>
     <td style="white-space:nowrap">
-      <button class="row-edit-btn" style="background:rgba(34,211,238,0.08);color:var(--teal);border-color:rgba(34,211,238,0.2)" onclick="openDetailRisk('${pkg.id}',${i})">👁</button>
+      <button class="row-edit-btn" style="background:rgba(34,211,238,0.08);color:var(--accent);border-color:rgba(34,211,238,0.2)" onclick="openDetailRisk('${pkg.id}',${i})">👁</button>
       <button class="row-edit-btn" onclick="openEditRisk('${pkg.id}',${i})">✏️</button>
       <button class="row-del-btn" onclick="confirmDelete('${pkg.id}',${i},'${r.id}')">🗑</button>
     </td>
@@ -2575,7 +2670,7 @@ function renderIdent(pkg) {
       </div>
     </div>
     <div class="tbl-wrap"><table id="tbl-ident-${pkg.id}">
-      <thead><tr><th>#</th><th>Kode</th><th>Aktivitas</th><th>Tujuan</th><th>Pernyataan Risiko</th><th>Kategori</th><th>Penyebab</th><th>Dampak</th><th>Pengendalian Ada</th><th>Hasil</th><th>Approval Tatalaksana</th><th>Aksi</th></tr></thead>
+      <thead><tr><th>#</th><th>Kode</th><th>Aktivitas</th><th>Tujuan</th><th>Pernyataan Risiko</th><th>Kategori</th><th>Penyebab</th><th>Dampak</th><th>Pengendalian Ada</th><th>Hasil</th><th>Approval Tatalaksana</th><th>Catatan Tatalaksana</th><th>Aksi</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
@@ -2602,6 +2697,10 @@ function renderAnalisa(pkg) {
           ${r.appr_analisa?'✓ Approved':'— Belum'}
         </button>
       </td>
+      <td>
+        <textarea class="catatan-input" rows="2" placeholder="Catatan Pokja Akuntabilitas..."
+          onblur="saveCatatan('${pkg.id}',${pkg.risks.indexOf(r)},'catatan_analisa',this)">${escTa(r.catatan_analisa)}</textarea>
+      </td>
       <td style="white-space:nowrap">
         <button class="row-edit-btn" onclick="openEditRisk('${pkg.id}',${pkg.risks.indexOf(r)})">✏️</button>
         <button class="row-del-btn" onclick="confirmDelete('${pkg.id}',${pkg.risks.indexOf(r)},'${r.id}')">🗑</button>
@@ -2618,7 +2717,7 @@ function renderAnalisa(pkg) {
   <div class="card">
     <div class="card-head"><div class="card-title">📊 Langkah 2: Analisa Risiko — Nilai K, D, Bobot & EMV</div></div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Kode</th><th>Analisis Nilai K</th><th>Prob</th><th>Nilai K</th><th>Analisis Nilai D</th><th>Nilai D</th><th>Bobot K×D</th><th>Fin. Benchmark</th><th>EMV</th><th>Approval Akuntabilitas</th><th>Aksi</th></tr></thead>
+      <thead><tr><th>Kode</th><th>Analisis Nilai K</th><th>Prob</th><th>Nilai K</th><th>Analisis Nilai D</th><th>Nilai D</th><th>Bobot K×D</th><th>Fin. Benchmark</th><th>EMV</th><th>Approval Akuntabilitas</th><th>Catatan Akuntabilitas</th><th>Aksi</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
@@ -2652,6 +2751,10 @@ function renderEvaluasi(pkg) {
           ${r.appr_eval?'✓ Approved':'— Belum'}
         </button>
       </td>
+      <td>
+        <textarea class="catatan-input" rows="2" placeholder="Catatan Pokja Pengawasan..."
+          onblur="saveCatatan('${pkg.id}',${pkg.risks.indexOf(r)},'catatan_eval',this)">${escTa(r.catatan_eval)}</textarea>
+      </td>
       <td style="white-space:nowrap">
         <button class="row-edit-btn" onclick="openEditRisk('${pkg.id}',${pkg.risks.indexOf(r)})">✏️</button>
         <button class="row-del-btn" onclick="confirmDelete('${pkg.id}',${pkg.risks.indexOf(r)},'${r.id}')">🗑</button>
@@ -2665,7 +2768,7 @@ function renderEvaluasi(pkg) {
   <div class="card">
     <div class="card-head"><div class="card-title">⚖️ Langkah 3: Evaluasi Risiko — Prioritas & Respon</div></div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Kode</th><th>Bobot K×D Awal</th><th>EMV Awal</th><th>Prioritas Risiko</th><th>Prioritas berdasarkan EMV</th><th>Respon Risiko</th><th>Approval Pengawasan</th><th>Aksi</th></tr></thead>
+      <thead><tr><th>Kode</th><th>Bobot K×D Awal</th><th>EMV Awal</th><th>Prioritas Risiko</th><th>Prioritas berdasarkan EMV</th><th>Respon Risiko</th><th>Approval Pengawasan</th><th>Catatan Pengawasan</th><th>Aksi</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
@@ -2698,6 +2801,10 @@ function renderPengendalian(pkg) {
           <br><button class="row-edit-btn" style="margin-top:6px" onclick="openEditRisk('${pkg.id}',${i})">✏️ Edit</button>
           <button class="row-del-btn" style="margin-top:4px" onclick="confirmDelete('${pkg.id}',${i},'${r.id}')">🗑 Hapus</button>
         </td>
+        <td style="min-width:160px">
+          <textarea class="catatan-input" rows="2" placeholder="Catatan Pokja Pengawasan..."
+            onblur="saveCatatan('${pkg.id}',${i},'catatan_kend',this)">${escTa(r.catatan_kend)}</textarea>
+        </td>
       </tr>`).join('');
 
     return `<div class="card" style="margin-bottom:16px">
@@ -2705,7 +2812,7 @@ function renderPengendalian(pkg) {
         <div class="card-title" style="gap:10px">${colorizeKat(kat)}<span style="font-size:11px;color:var(--slate);font-weight:400">(${entries.length} risiko)</span></div>
       </div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Kode / Aktivitas</th><th>Jenis Pengendalian</th><th>RTP</th><th>Sumber Daya</th><th>Approval</th></tr></thead>
+        <thead><tr><th>Kode / Aktivitas</th><th>Jenis Pengendalian</th><th>RTP</th><th>Sumber Daya</th><th>Approval</th><th>Catatan Pokja Pengawasan</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -2754,11 +2861,6 @@ function renderResidual(pkg) {
       <td style="font-size:11px">${r.pj}</td>
       <td style="font-size:11px">${r.target}</td>
       <td style="font-size:11px">${r.luaran}</td>
-      <td style="text-align:center">
-        <button class="appr-toggle ${r.appr_res?'appr-on':'appr-off'}" onclick="toggleAppr('${pkg.id}',${i},'appr_res',this)">
-          ${r.appr_res?'✓ Approved':'— Belum'}
-        </button>
-      </td>
       <td style="white-space:nowrap">
         <button class="row-edit-btn" onclick="openEditRisk('${pkg.id}',${i})">✏️</button>
         <button class="row-del-btn" onclick="confirmDelete('${pkg.id}',${i},'${r.id}')">🗑</button>
@@ -2767,7 +2869,7 @@ function renderResidual(pkg) {
 
   return `<div class="infobox green">
     <span class="infobox-icon">🔄</span>
-    <div><strong>Residual Risk</strong> adalah sisa risiko setelah pengendalian diterapkan. Kolom <strong>Nilai K/D Residual</strong> menunjukkan perkiraan bobot setelah RTP dilaksanakan.</div>
+    <div><strong>Residual Risk</strong> adalah sisa risiko setelah pengendalian diterapkan. Kolom <strong>Nilai K/D Residual</strong> menunjukkan perkiraan bobot setelah RTP dilaksanakan. Approval Pokja Pengawasan pada tahap ini dianggap sudah tercakup melalui approval Identifikasi → Analisa → Evaluasi → Pengendalian sebelumnya.</div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
     <div class="card" style="margin:0">
@@ -2788,7 +2890,7 @@ function renderResidual(pkg) {
   <div class="card">
     <div class="card-head"><div class="card-title">🔄 Langkah 5: Tabel Residual Risiko (V5-9)</div></div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Kode</th><th>Analisis K Residual</th><th>Nilai K Res</th><th>Analisis D Residual</th><th>Nilai D Res</th><th>Prob Residual</th><th>Financial Benchmark</th><th>Bobot Awal</th><th>Bobot Residual</th><th>EMV Residual</th><th>% Pagu</th><th>PJ RTP</th><th>Target</th><th>Luaran</th><th>Approval Pengawasan</th><th>Aksi</th></tr></thead>
+      <thead><tr><th>Kode</th><th>Analisis K Residual</th><th>Nilai K Res</th><th>Analisis D Residual</th><th>Nilai D Res</th><th>Prob Residual</th><th>Financial Benchmark</th><th>Bobot Awal</th><th>Bobot Residual</th><th>EMV Residual</th><th>% Pagu</th><th>PJ RTP</th><th>Target</th><th>Luaran</th><th>Aksi</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
@@ -2811,26 +2913,26 @@ function renderMatrik(pkg) {
   }
 
   function buildTable(grid, title) {
-    const isTA = pkg.id==='TA';
     const th = `<tr><th class="row-header" style="min-width:140px">K ↓ / D →</th>${DAM_LABELS.map(d=>`<th class="matrix-cell" style="font-size:9px;padding:6px 4px">${d}</th>`).join('')}</tr>`;
     const tbody = PROB_LABELS.map((pl,ri)=>{
       const cells = [0,1,2,3,4].map(ci=>{
-        const bobot = (5-ri)*(ci+1);
+        const bobot = govMatrixValue(5-ri, ci+1);
         const codes = grid[ri][ci];
         const chips = codes.map(c=>`<div class="risk-chip">${c}</div>`).join('');
-        return `<td class="matrix-cell ${mcClass(bobot)}">${chips||bobot}</td>`;
+        const tolBorder = govToleranceBorder(ri, ci);
+        return `<td class="matrix-cell ${mcClass(bobot)}"${tolBorder?` style="${tolBorder}"`:''}>${chips||bobot}</td>`;
       }).join('');
       return `<tr><td class="row-header" style="font-size:10px;padding:8px 10px;white-space:nowrap">${pl}</td>${cells}</tr>`;
     }).join('');
     return `<div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:700;color:var(--white);margin-bottom:10px">${title}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text-main);margin-bottom:10px">${title}</div>
       <div class="matrix-wrap"><table class="matrix-table"><thead>${th}</thead><tbody>${tbody}</tbody></table></div>
     </div>`;
   }
 
   return `<div class="infobox blue">
     <span class="infobox-icon">🎯</span>
-    <div><strong>Matriks Risiko V5-9</strong> — Posisi risiko ditentukan oleh <strong>Nilai K × D</strong>. Perubahan posisi dari inherent ke residual menunjukkan efektivitas pengendalian.</div>
+    <div><strong>Matriks Risiko Pemerintahan (SE Menteri PUPR 12/2024)</strong> — Posisi risiko ditentukan oleh kombinasi <strong>Tingkat Kemungkinan (K)</strong> dan <strong>Tingkat Dampak (D)</strong> sesuai Tabel 10 Matriks Analisis Risiko. Area di dalam <strong style="color:#a78bfa">Garis Toleransi</strong> (ungu) adalah risiko yang dapat diterima (Sangat Rendah–Rendah). Perubahan posisi dari inherent ke residual menunjukkan efektivitas pengendalian.</div>
   </div>
   <div class="card">
     <div class="card-head">
@@ -2843,6 +2945,7 @@ function renderMatrik(pkg) {
         <div class="legend-item"><div class="legend-dot" style="background:#b58a00"></div><span class="legend-label legend-s">Sedang (11–15)</span></div>
         <div class="legend-item"><div class="legend-dot" style="background:#c05a00"></div><span class="legend-label legend-t">Tinggi (16–19)</span></div>
         <div class="legend-item"><div class="legend-dot" style="background:#9a0000"></div><span class="legend-label legend-st">Sangat Tinggi (20–25)</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div><span class="legend-label" style="color:#c4b5fd">Garis Toleransi</span></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
         ${buildTable(buildGrid(false),'⬛ Sebelum Pengendalian (Inherent Risk)')}
@@ -2956,8 +3059,9 @@ function renderMatrikRef() {
   const thead = `<tr><th class="row-header">K ↓ / D →</th>${DAM.map(d=>`<th class="matrix-cell" style="font-size:9px;padding:6px">${d}</th>`).join('')}</tr>`;
   const tbody = PROB.map((pl,ri)=>{
     const cells = [0,1,2,3,4].map(ci=>{
-      const n = (5-ri)*(ci+1);
-      return `<td class="matrix-cell ${mcClass(n)}">${n}</td>`;
+      const n = govMatrixValue(5-ri, ci+1);
+      const tolBorder = govToleranceBorder(ri, ci);
+      return `<td class="matrix-cell ${mcClass(n)}"${tolBorder?` style="${tolBorder}"`:''}>${n}</td>`;
     }).join('');
     return `<tr><td class="row-header" class="row-header-ref" style="font-size:10px;padding:8px 10px;white-space:nowrap">${pl}</td>${cells}</tr>`;
   }).join('');
@@ -3025,13 +3129,6 @@ function setRespon(pkgId, rIdx, val) {
   if(packages[pkgId]&&packages[pkgId].risks[rIdx]) {
     packages[pkgId].risks[rIdx].respon = val;
   }
-}
-
-function toggleAppr(pkgId, rIdx, field, btn) {
-  const r = packages[pkgId].risks[rIdx];
-  r[field] = !r[field];
-  btn.className = `appr-btn ${r[field]?'appr-yes':'appr-no'}`;
-  btn.textContent = r[field]?(field==='appr_res'?'✓':'✓ Disetujui'):(field==='appr_res'?'—':'— Belum');
 }
 
 // ══ EMAIL CONFIRM MODAL ════════════════════════════════
@@ -3167,6 +3264,7 @@ function doAddRisk() {
     pengendalian_ada:document.getElementById('ar-pengendalian-ada').value.trim(),
     hasil:           document.getElementById('ar-hasil').value,
     appr_ident:      false,
+    catatan_ident:   '',
     analisis_k:      document.getElementById('ar-analisis-k').value.trim(),
     prob_val:        parseFloat(document.getElementById('ar-prob-val').value)||0.1,
     nilai_k:         nk,
@@ -3174,12 +3272,15 @@ function doAddRisk() {
     nilai_d:         nd,
     fin_bench:       parseFloat(document.getElementById('ar-finbench').value)||226207000,
     appr_analisa:    false,
+    catatan_analisa: '',
     respon:          document.getElementById('ar-respon').value,
     appr_eval:       false,
+    catatan_eval:    '',
     jenis:           [...document.querySelectorAll('.jenis-cb:checked')].map(c=>c.value).join('; ')||'Penguatan; Pencegahan; Pendidikan',
     rtp:             document.getElementById('ar-rtp').value.trim(),
     sumber:          document.getElementById('ar-sumber').value.trim(),
     appr_kend:       false,
+    catatan_kend:    '',
     analisis_k_res:  document.getElementById('ar-analisis-k-res').value.trim(),
     prob_res:        parseFloat(document.getElementById('ar-prob-res').value)||0.05,
     nilai_k_res:     parseInt(document.getElementById('ar-nilai-k-res').value)||1,
@@ -3827,7 +3928,7 @@ function openDetailRisk(pkgId, rIdx) {
       </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px">
-      ${[['Tatalaksana',r.appr_ident],['Akuntabilitas (Analisa)',r.appr_analisa],['Pengawasan (Eval)',r.appr_eval],['Akuntabilitas (Kend)',r.appr_kend],['Pengawasan (Residual)',r.appr_res]].map(([l,v])=>`
+      ${[['Tatalaksana',r.appr_ident],['Akuntabilitas (Analisa)',r.appr_analisa],['Pengawasan (Eval)',r.appr_eval],['Akuntabilitas (Kend)',r.appr_kend]].map(([l,v])=>`
       <div style="display:flex;align-items:center;gap:5px;font-size:10px;padding:4px 10px;border-radius:20px;border:1px solid;${v?'background:rgba(34,197,94,0.1);color:#4ade80;border-color:rgba(34,197,94,0.3)':'background:rgba(148,163,184,0.07);color:var(--slate);border-color:var(--border)'}">
         <span>${v?'✓':'—'}</span><span>${l}</span>
       </div>`).join('')}
@@ -4012,10 +4113,9 @@ function doPrint() {
       <td style="text-align:center"><span class="${lvlClass(bi)}">${bi}</span></td>
       <td style="text-align:center"><span class="${lvlClass(br)}">${br}</span></td>
       <td style="text-align:right">${fmt(emvR)}</td>
-      <td>${esc(r.pj)}</td><td>${esc(r.target)}</td><td>${esc(r.luaran)}</td>
-      <td style="text-align:center">${appr(r.appr_res)}</td></tr>`;
+      <td>${esc(r.pj)}</td><td>${esc(r.target)}</td><td>${esc(r.luaran)}</td></tr>`;
     }).join('');
-    return `<table><thead><tr><th>Kode</th><th>Analisis K Res</th><th>K Res</th><th>Analisis D Res</th><th>D Res</th><th>Prob Res</th><th>Bobot Awal</th><th>Bobot Res</th><th>EMV Res</th><th>PJ</th><th>Target</th><th>Luaran</th><th>Approval</th></tr></thead><tbody>${rows}</tbody></table>`;
+    return `<table><thead><tr><th>Kode</th><th>Analisis K Res</th><th>K Res</th><th>Analisis D Res</th><th>D Res</th><th>Prob Res</th><th>Bobot Awal</th><th>Bobot Res</th><th>EMV Res</th><th>PJ</th><th>Target</th><th>Luaran</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
   function gm(p) {
     const PL=['5 — Hampir pasti','4 — Sering','3 — Kadang','2 — Jarang','1 — Hampir tidak'];
@@ -4025,12 +4125,13 @@ function doPrint() {
         const ri=5-nk,ci=nd-1; if(ri>=0&&ri<5&&ci>=0&&ci<5) g[ri][ci].push(r.id); }); return g; }
     function bTable(grid,title){ const hc=DL.map(d=>`<th style="font-size:7pt">${d}</th>`).join('');
       const br=PL.map((pl,ri)=>{ const cells=[0,1,2,3,4].map(ci=>{
-        const b=(5-ri)*(ci+1),codes=grid[ri][ci];
-        return `<td class="mx-c" style="border:1px solid #bbb;text-align:center;padding:3px;font-size:7.5pt;font-weight:bold;width:80px;height:36px;${mcStyle(b)}">${codes.length?codes.join('<br>'):b}</td>`;
+        const b=govMatrixValue(5-ri,ci+1),codes=grid[ri][ci];
+        const tolBorder=govToleranceBorder(ri,ci).replace(/3px/g,'2.5pt');
+        return `<td class="mx-c" style="border:1px solid #bbb;text-align:center;padding:3px;font-size:7.5pt;font-weight:bold;width:80px;height:36px;${mcStyle(b)}${tolBorder}">${codes.length?codes.join('<br>'):b}</td>`;
       }).join(''); return `<tr><td class="rh">${pl}</td>${cells}</tr>`; }).join('');
       return `<p style="font-weight:bold;font-size:8.5pt;margin:8px 0 3px">${title}</p>
         <table class="mx-table"><thead><tr><th style="white-space:nowrap">K ↓ / D →</th>${hc}</tr></thead><tbody>${br}</tbody></table>`; }
-    const legend=[['#86efac','#14532d','Sangat Rendah (1–5)'],['#22c55e','#052e16','Rendah (6–10)'],['#facc15','#713f12','Sedang (11–15)'],['#f97316','#431407','Tinggi (16–19)'],['#ef4444','#450a0a','Sangat Tinggi (20–25)']];
+    const legend=[['#86efac','#14532d','Sangat Rendah (1–5)'],['#22c55e','#052e16','Rendah (6–10)'],['#facc15','#713f12','Sedang (11–15)'],['#f97316','#431407','Tinggi (16–19)'],['#ef4444','#450a0a','Sangat Tinggi (20–25)'],['#7c3aed','#7c3aed','Garis Toleransi']];
     const lgHtml=legend.map(([bg,c,l])=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:10px;font-size:7.5pt"><span style="width:12px;height:12px;background:${bg};display:inline-block;border-radius:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact"></span><b style="color:${c}">${l}</b></span>`).join('');
     return `<div style="margin-bottom:6px">${lgHtml}</div>
       <div class="two-col"><div class="two-col-cell">${bTable(bGrid(false),'⬛ Sebelum Pengendalian (Inherent Risk)')}</div>
@@ -4215,13 +4316,12 @@ function exportWord() {
         <td>${esc(r.pj)}</td>
         <td>${esc(r.target)}</td>
         <td>${esc(r.luaran)}</td>
-        <td style="text-align:center">${appr(r.appr_res)}</td>
       </tr>`;
     }).join('');
     return `<table><thead><tr>
       <th>Kode</th><th>Analisis K Res</th><th>K Res</th><th>Analisis D Res</th><th>D Res</th>
       <th>Prob Res</th><th>Bobot Awal</th><th>Bobot Res</th><th>EMV Res</th>
-      <th>PJ RTP</th><th>Target</th><th>Luaran</th><th>Approval</th>
+      <th>PJ RTP</th><th>Target</th><th>Luaran</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
   }
 
@@ -4242,10 +4342,11 @@ function exportWord() {
       const headerCells = DAM_LABELS.map(d=>`<th style="width:80px;font-size:7pt">${d}</th>`).join('');
       const bodyRows = PROB_LABELS.map((pl,ri) => {
         const cells = [0,1,2,3,4].map(ci => {
-          const b = (5-ri)*(ci+1);
+          const b = govMatrixValue(5-ri, ci+1);
           const codes = grid[ri][ci];
           const content = codes.length ? codes.join('<br>') : b;
-          return `<td style="border:1px solid #bbb;text-align:center;padding:3px;font-size:7.5pt;font-weight:bold;width:80px;height:36px;${mcStyle(b)}">${content}</td>`;
+          const tolBorder = govToleranceBorder(ri, ci).replace(/3px/g,'2.5pt');
+          return `<td style="border:1px solid #bbb;text-align:center;padding:3px;font-size:7.5pt;font-weight:bold;width:80px;height:36px;${mcStyle(b)}${tolBorder}">${content}</td>`;
         }).join('');
         return `<tr><td class="rh">${pl}</td>${cells}</tr>`;
       }).join('');
@@ -4254,7 +4355,7 @@ function exportWord() {
           <tr><th style="width:120px">K ↓ / D →</th>${headerCells}</tr>
         </thead><tbody>${bodyRows}</tbody></table>`;
     }
-    const legend = [['#86efac','#14532d','Sangat Rendah (1–5)'],['#22c55e','#052e16','Rendah (6–10)'],['#facc15','#713f12','Sedang (11–15)'],['#f97316','#431407','Tinggi (16–19)'],['#ef4444','#450a0a','Sangat Tinggi (20–25)']];
+    const legend = [['#86efac','#14532d','Sangat Rendah (1–5)'],['#22c55e','#052e16','Rendah (6–10)'],['#facc15','#713f12','Sedang (11–15)'],['#f97316','#431407','Tinggi (16–19)'],['#ef4444','#450a0a','Sangat Tinggi (20–25)'],['#7c3aed','#7c3aed','Garis Toleransi']];
     const legendHtml = legend.map(([bg,c,l])=>`<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:8pt"><span style="width:14px;height:14px;background:${bg};border-radius:2px;display:inline-block"></span><span style="color:${c};font-weight:bold">${l}</span></span>`).join('');
     return `<div style="margin-bottom:8px">${legendHtml}</div>
       <div style="display:table;width:100%">
