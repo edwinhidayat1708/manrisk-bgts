@@ -1559,14 +1559,23 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
       <input type="hidden" id="rtp-pkg-id">
       <input type="hidden" id="rtp-edit-idx">
 
+      <div class="form-group">
+        <label class="form-label">🔗 Tarik dari Risiko Terdaftar (Tab Pengendalian)</label>
+        <select class="form-select" id="rtp-risk-select" onchange="onRTPRiskSelect()">
+          <option value="">— Manual (tidak terhubung ke risiko manapun) —</option>
+        </select>
+        <div style="font-size:10px;color:var(--slate);margin-top:4px">Memilih risiko akan mengisi otomatis Pernyataan Risiko, Respon Risiko, RTP, Penanggung Jawab &amp; Indikator dari data yang sudah ada — field tetap bisa disunting bila perlu penyesuaian periode ini.</div>
+        <div id="rtp-risk-history" style="display:none;font-size:11px;color:var(--gold-lt);margin-top:6px;background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.2);border-radius:6px;padding:8px 10px"></div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Tahun <span class="required-star">*</span></label>
-          <input class="form-input" id="rtp-tahun" type="number" placeholder="2026">
+          <input class="form-input" id="rtp-tahun" type="number" placeholder="2026" onchange="applyRTPDateDefaults()">
         </div>
         <div class="form-group">
           <label class="form-label">Semester <span class="required-star">*</span></label>
-          <select class="form-select" id="rtp-semester">
+          <select class="form-select" id="rtp-semester" onchange="applyRTPDateDefaults()">
             <option value="1">Semester 1</option>
             <option value="2">Semester 2</option>
           </select>
@@ -1575,7 +1584,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 
       <div class="form-group">
         <label class="form-label">Pernyataan Risiko <span class="required-star">*</span></label>
-        <textarea class="form-textarea" id="rtp-pernyataan" placeholder="Uraian pernyataan risiko yang dipantau (manual untuk saat ini)..."></textarea>
+        <textarea class="form-textarea" id="rtp-pernyataan" placeholder="Uraian pernyataan risiko yang dipantau..."></textarea>
       </div>
 
       <div class="form-group">
@@ -1602,11 +1611,11 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Target Waktu</label>
-          <input class="form-input" id="rtp-target" placeholder="31 Desember 2026">
+          <input class="form-input" id="rtp-target-date" type="date" onchange="recalcRTPStatus()">
         </div>
         <div class="form-group">
           <label class="form-label">Realisasi Waktu</label>
-          <input class="form-input" id="rtp-realisasi" placeholder="30 Juni 2026">
+          <input class="form-input" id="rtp-realisasi-date" type="date" onchange="recalcRTPStatus()">
         </div>
       </div>
 
@@ -1615,14 +1624,44 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
         <textarea class="form-textarea" id="rtp-hasil" placeholder="Uraian capaian/realisasi RTP sampai periode ini..."></textarea>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Hambatan / Kendala</label>
-        <textarea class="form-textarea" id="rtp-hambatan" placeholder="Kendala yang dihadapi dalam pelaksanaan RTP..."></textarea>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">% Realisasi</label>
+          <input class="form-input" id="rtp-persen" type="number" min="0" max="100" step="5" value="0" oninput="recalcRTPStatus()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status Realisasi <span style="font-weight:400;color:var(--slate)">(auto-saran, bisa diubah)</span></label>
+          <select class="form-select" id="rtp-status">
+            <option value="Belum Mulai">⚪ Belum Mulai</option>
+            <option value="On Track">🟢 On Track</option>
+            <option value="Terlambat">🟠 Terlambat</option>
+            <option value="Berisiko Tidak Tercapai">🔴 Berisiko Tidak Tercapai</option>
+            <option value="Selesai">✅ Selesai</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Kategori Hambatan</label>
+          <select class="form-select" id="rtp-hambatan-kategori">
+            <option value="">— Tidak ada hambatan —</option>
+            <option value="Anggaran">Anggaran</option>
+            <option value="SDM">SDM</option>
+            <option value="Regulasi/Eksternal">Regulasi / Eksternal</option>
+            <option value="Teknis">Teknis</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Link Bukti Dukung</label>
+          <input class="form-input" id="rtp-link" placeholder="https://drive.google.com/...">
+        </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Link Bukti Dukung</label>
-        <input class="form-input" id="rtp-link" placeholder="https://drive.google.com/...">
+        <label class="form-label">Detail Hambatan / Kendala</label>
+        <textarea class="form-textarea" id="rtp-hambatan" placeholder="Uraian kendala yang dihadapi dalam pelaksanaan RTP..."></textarea>
       </div>
 
       <button class="topbar-action btn-primary" style="width:100%;justify-content:center;margin-top:8px;padding:12px" onclick="saveRTPForm()">✅ Simpan Pemantauan RTP</button>
@@ -1633,7 +1672,28 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-24 (2026-07-28) — Tab baru "Pemantauan RTP" (Tahap 1 dari Lampiran B
+//  VERSI: v5-25 (2026-07-28) — Pemantauan RTP Tahap 2-4 + 8:
+//  (1) Auto-pull Pernyataan Risiko/Respon/RTP/PJ/Indikator dari risiko
+//      terdaftar di tab Pengendalian via dropdown "🔗 Tarik dari Risiko"
+//      (field tetap bisa disunting manual untuk penyesuaian periode).
+//  (2) Riwayat pemantauan per risiko ditampilkan saat risiko dipilih
+//      (histori beberapa periode terakhir) — fondasi untuk risk trend.
+//  (3) Status realisasi terstruktur: Target/Realisasi Waktu kini date-
+//      picker + % Realisasi (angka) + Status (Belum Mulai/On Track/
+//      Terlambat/Berisiko Tidak Tercapai/Selesai) — saran otomatis dari
+//      computeRTPStatus(), tetap bisa diubah manual.
+//  (4) Kategorisasi Hambatan/Kendala (Anggaran/SDM/Regulasi-Eksternal/
+//      Teknis/Lainnya) + detail teks bebas.
+//  (8) Verifikasi Pokja Pengawasan per entri RTP (toggle + catatan),
+//      mengikuti pola appr_*/catatan_* yang sudah ada di tab lain.
+//  PERLU MIGRASI SUPABASE: kolom baru di tabel rtp_monitoring
+//  (target_date, realisasi_date, persen_realisasi, status_realisasi,
+//  hambatan_kategori, appr_rtp, catatan_appr_rtp) — lihat file SQL migrasi.
+//  BELUM DIKERJAKAN (rencana tahap terpisah): upload bukti dukung ke
+//  Supabase Storage (5), reminder kepatuhan semester (6), dashboard
+//  agregat RTP (7), export format resmi Lampiran B (9).
+//
+//  VERSI SEBELUMNYA: v5-24 (2026-07-28) — Tab baru "Pemantauan RTP" (Tahap 1 dari Lampiran B
 //  SE Menteri PUPR 12/2024). Fondasi data & CRUD dasar: tambah/edit/hapus entri
 //  pemantauan per paket (Tahun, Semester, Pernyataan Risiko, Respon Risiko, RTP,
 //  Penanggung Jawab, Indikator, Target/Realisasi Waktu, Hasil Pemantauan,
@@ -2356,25 +2416,33 @@ async function saveCatatan(pkgId, rIdx, field, el) {
 
 // ═══════════════════════════════════════════════════════
 //  PEMANTAUAN RTP — Lampiran B SE Menteri PUPR 12/2024
-//  Tahap 1: fondasi data & tab (Pernyataan/Respon Risiko
-//  masih input manual — belum auto-pull dari Pengendalian)
+//  Tahap 2: auto-pull dari risiko terdaftar (Pengendalian),
+//  status realisasi terstruktur (otomatis dari tanggal & %),
+//  kategorisasi hambatan, approval Pokja Pengawasan.
 // ═══════════════════════════════════════════════════════
 function rtpRowToItem(row) {
   return {
-    id:               row.id,
-    riskId:           row.risk_id || '',
-    tahun:            row.tahun,
-    semester:         row.semester,
-    pernyataanRisiko: row.pernyataan_risiko || '',
-    responRisiko:     row.respon_risiko || '',
-    rencanaTindak:    row.rencana_tindak || '',
-    penanggungJawab:  row.penanggung_jawab || '',
-    indikator:        row.indikator || '',
-    targetWaktu:      row.target_waktu || '',
-    realisasiWaktu:   row.realisasi_waktu || '',
-    hasilPemantauan:  row.hasil_pemantauan || '',
-    hambatan:         row.hambatan || '',
-    linkBukti:        row.link_bukti || '',
+    id:                row.id,
+    riskId:            row.risk_id || '',
+    tahun:             row.tahun,
+    semester:          row.semester,
+    pernyataanRisiko:  row.pernyataan_risiko || '',
+    responRisiko:      row.respon_risiko || '',
+    rencanaTindak:     row.rencana_tindak || '',
+    penanggungJawab:   row.penanggung_jawab || '',
+    indikator:         row.indikator || '',
+    targetWaktu:       row.target_waktu || '',
+    realisasiWaktu:    row.realisasi_waktu || '',
+    targetDate:        row.target_date || '',
+    realisasiDate:     row.realisasi_date || '',
+    hasilPemantauan:   row.hasil_pemantauan || '',
+    hambatan:          row.hambatan || '',
+    hambatanKategori:  row.hambatan_kategori || '',
+    persenRealisasi:   (row.persen_realisasi===null||row.persen_realisasi===undefined) ? 0 : parseFloat(row.persen_realisasi),
+    statusRealisasi:   row.status_realisasi || 'Belum Mulai',
+    linkBukti:         row.link_bukti || '',
+    apprRtp:           row.appr_rtp === true,
+    catatanApprRtp:    row.catatan_appr_rtp || '',
   };
 }
 
@@ -2393,10 +2461,106 @@ function rtpItemToRow(item, pkgId) {
     indikator:         item.indikator || '',
     target_waktu:      item.targetWaktu || '',
     realisasi_waktu:   item.realisasiWaktu || '',
+    target_date:       item.targetDate || null,
+    realisasi_date:    item.realisasiDate || null,
     hasil_pemantauan:  item.hasilPemantauan || '',
     hambatan:          item.hambatan || '',
+    hambatan_kategori: item.hambatanKategori || null,
+    persen_realisasi:  item.persenRealisasi ?? 0,
+    status_realisasi:  item.statusRealisasi || 'Belum Mulai',
     link_bukti:        item.linkBukti || '',
   };
+}
+
+// ─── Helper: format tanggal ISO (yyyy-mm-dd) → teks Indonesia ───
+const BULAN_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+function formatDateID(isoDate) {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length !== 3) return isoDate;
+  const [y,m,d] = parts;
+  const mi = parseInt(m,10) - 1;
+  if (mi < 0 || mi > 11) return isoDate;
+  return `${parseInt(d,10)} ${BULAN_ID[mi]} ${y}`;
+}
+
+// ─── Helper: saran status realisasi otomatis dari % & tanggal target ───
+function computeRTPStatus(persen, targetDateISO) {
+  const p = parseFloat(persen) || 0;
+  if (p >= 100) return 'Selesai';
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  if (targetDateISO) {
+    const target = new Date(targetDateISO);
+    if (!isNaN(target.getTime()) && today > target) {
+      return p < 50 ? 'Berisiko Tidak Tercapai' : 'Terlambat';
+    }
+  }
+  if (p <= 0) return 'Belum Mulai';
+  return 'On Track';
+}
+
+// ─── Default tanggal Target/Realisasi berdasar Tahun & Semester ───
+// Mengikuti konvensi umum pelaporan: Target = akhir tahun berjalan,
+// Realisasi = pertengahan tahun (Sem 1) atau akhir tahun (Sem 2).
+function applyRTPDateDefaults() {
+  const tahun    = parseInt(document.getElementById('rtp-tahun').value, 10) || new Date().getFullYear();
+  const semester = document.getElementById('rtp-semester').value;
+  const targetEl    = document.getElementById('rtp-target-date');
+  const realisasiEl = document.getElementById('rtp-realisasi-date');
+  if (!targetEl.value) targetEl.value = `${tahun}-12-31`;
+  if (!realisasiEl.value) realisasiEl.value = semester === '1' ? `${tahun}-06-30` : `${tahun}-12-31`;
+  recalcRTPStatus();
+}
+
+// ─── Hitung ulang saran status setiap % atau tanggal berubah ───
+function recalcRTPStatus() {
+  const persen = document.getElementById('rtp-persen').value;
+  const target = document.getElementById('rtp-target-date').value;
+  document.getElementById('rtp-status').value = computeRTPStatus(persen, target);
+}
+
+// ─── Saat memilih risiko terdaftar: auto-isi field statis dari data Pengendalian ───
+function onRTPRiskSelect() {
+  const pkgId  = document.getElementById('rtp-pkg-id').value;
+  const riskId = document.getElementById('rtp-risk-select').value;
+  const pkg    = packages[pkgId];
+  const histEl = document.getElementById('rtp-risk-history');
+
+  if (!riskId || !pkg) { histEl.style.display = 'none'; return; }
+
+  const r = pkg.risks.find(x => x.id === riskId);
+  if (!r) { histEl.style.display = 'none'; return; }
+
+  document.getElementById('rtp-pernyataan').value = r.pernyataan || '';
+  document.getElementById('rtp-respon').value     = r.respon     || '';
+  document.getElementById('rtp-rencana').value    = r.rtp        || '';
+  document.getElementById('rtp-pj').value         = r.pj         || '';
+  document.getElementById('rtp-indikator').value  = r.luaran     || '';
+
+  // Riwayat pemantauan sebelumnya untuk risiko ini (poin: histori per semester)
+  const past = (pkg.rtpItems || []).filter(it => it.riskId === riskId);
+  if (past.length > 0) {
+    const list = past.slice(0,3).map(it => `${it.tahun}/Sem ${it.semester}: ${it.persenRealisasi||0}% — ${it.statusRealisasi||'-'}`).join(' · ');
+    histEl.textContent = `📋 Riwayat pemantauan risiko ini (${past.length} entri sebelumnya): ${list}`;
+    histEl.style.display = 'block';
+  } else {
+    histEl.textContent = 'ℹ️ Belum ada riwayat pemantauan untuk risiko ini — entri ini akan menjadi yang pertama.';
+    histEl.style.display = 'block';
+  }
+}
+
+// ─── Isi dropdown pilihan risiko dari pkg.risks ───
+function populateRTPRiskSelect(pkgId, selectedRiskId) {
+  const pkg = packages[pkgId];
+  const sel = document.getElementById('rtp-risk-select');
+  const opts = ['<option value="">— Manual (tidak terhubung ke risiko manapun) —</option>'];
+  (pkg?.risks || []).forEach(r => {
+    const label = `${r.id} — ${(r.pernyataan||'').slice(0,60)}${(r.pernyataan||'').length>60?'…':''}`;
+    opts.push(`<option value="${r.id}">${escTa(label)}</option>`);
+  });
+  sel.innerHTML = opts.join('');
+  sel.value = selectedRiskId || '';
 }
 
 // ─── Muat data Pemantauan RTP untuk satu paket (lazy-load, sekali per paket) ───
@@ -2432,18 +2596,27 @@ function openAddRTP(pkgId, idx) {
   document.getElementById('rtp-edit-idx').value  = (idx===undefined||idx===null) ? '' : idx;
   document.getElementById('rtp-modal-title').textContent = item ? '✏️ Ubah Pemantauan RTP' : '+ Tambah Pemantauan RTP';
 
-  document.getElementById('rtp-tahun').value     = item?.tahun     || new Date().getFullYear();
-  document.getElementById('rtp-semester').value  = item?.semester  || '1';
-  document.getElementById('rtp-pernyataan').value= item?.pernyataanRisiko || '';
-  document.getElementById('rtp-respon').value    = item?.responRisiko    || '';
-  document.getElementById('rtp-rencana').value   = item?.rencanaTindak   || '';
-  document.getElementById('rtp-pj').value        = item?.penanggungJawab || '';
-  document.getElementById('rtp-indikator').value = item?.indikator       || '';
-  document.getElementById('rtp-target').value    = item?.targetWaktu     || '';
-  document.getElementById('rtp-realisasi').value = item?.realisasiWaktu  || '';
-  document.getElementById('rtp-hasil').value     = item?.hasilPemantauan || '';
-  document.getElementById('rtp-hambatan').value  = item?.hambatan        || '';
-  document.getElementById('rtp-link').value      = item?.linkBukti       || '';
+  populateRTPRiskSelect(pkgId, item?.riskId || '');
+
+  document.getElementById('rtp-tahun').value       = item?.tahun     || new Date().getFullYear();
+  document.getElementById('rtp-semester').value    = item?.semester  || '1';
+  document.getElementById('rtp-pernyataan').value  = item?.pernyataanRisiko || '';
+  document.getElementById('rtp-respon').value      = item?.responRisiko    || '';
+  document.getElementById('rtp-rencana').value     = item?.rencanaTindak   || '';
+  document.getElementById('rtp-pj').value          = item?.penanggungJawab || '';
+  document.getElementById('rtp-indikator').value   = item?.indikator       || '';
+  document.getElementById('rtp-target-date').value    = item?.targetDate    || '';
+  document.getElementById('rtp-realisasi-date').value = item?.realisasiDate || '';
+  document.getElementById('rtp-hasil').value       = item?.hasilPemantauan || '';
+  document.getElementById('rtp-persen').value      = item?.persenRealisasi ?? 0;
+  document.getElementById('rtp-status').value      = item?.statusRealisasi || 'Belum Mulai';
+  document.getElementById('rtp-hambatan-kategori').value = item?.hambatanKategori || '';
+  document.getElementById('rtp-hambatan').value    = item?.hambatan        || '';
+  document.getElementById('rtp-link').value        = item?.linkBukti       || '';
+
+  document.getElementById('rtp-risk-history').style.display = 'none';
+  if (item?.riskId) onRTPRiskSelect();
+  if (!item) applyRTPDateDefaults();
 
   document.getElementById('rtp-modal').classList.add('open');
 }
@@ -2467,26 +2640,35 @@ async function saveRTPForm() {
     return;
   }
 
+  const targetDate    = document.getElementById('rtp-target-date').value;
+  const realisasiDate = document.getElementById('rtp-realisasi-date').value;
+
   const item = {
-    tahun:            parseInt(document.getElementById('rtp-tahun').value, 10) || new Date().getFullYear(),
-    semester:         document.getElementById('rtp-semester').value,
-    pernyataanRisiko: pernyataan,
-    responRisiko:     document.getElementById('rtp-respon').value.trim(),
-    rencanaTindak:    rencana,
-    penanggungJawab:  document.getElementById('rtp-pj').value.trim(),
-    indikator:        document.getElementById('rtp-indikator').value.trim(),
-    targetWaktu:      document.getElementById('rtp-target').value.trim(),
-    realisasiWaktu:   document.getElementById('rtp-realisasi').value.trim(),
-    hasilPemantauan:  document.getElementById('rtp-hasil').value.trim(),
-    hambatan:         document.getElementById('rtp-hambatan').value.trim(),
-    linkBukti:        document.getElementById('rtp-link').value.trim(),
+    riskId:            document.getElementById('rtp-risk-select').value || '',
+    tahun:             parseInt(document.getElementById('rtp-tahun').value, 10) || new Date().getFullYear(),
+    semester:          document.getElementById('rtp-semester').value,
+    pernyataanRisiko:  pernyataan,
+    responRisiko:      document.getElementById('rtp-respon').value.trim(),
+    rencanaTindak:     rencana,
+    penanggungJawab:   document.getElementById('rtp-pj').value.trim(),
+    indikator:         document.getElementById('rtp-indikator').value.trim(),
+    targetDate:        targetDate || '',
+    realisasiDate:     realisasiDate || '',
+    targetWaktu:       formatDateID(targetDate),
+    realisasiWaktu:    formatDateID(realisasiDate),
+    hasilPemantauan:   document.getElementById('rtp-hasil').value.trim(),
+    persenRealisasi:   parseFloat(document.getElementById('rtp-persen').value) || 0,
+    statusRealisasi:   document.getElementById('rtp-status').value,
+    hambatanKategori:  document.getElementById('rtp-hambatan-kategori').value,
+    hambatan:          document.getElementById('rtp-hambatan').value.trim(),
+    linkBukti:         document.getElementById('rtp-link').value.trim(),
   };
 
   try {
     if (idx !== null && pkg.rtpItems && pkg.rtpItems[idx]) {
       const oldItem = pkg.rtpItems[idx];
       await SB.patch('rtp_monitoring', `id=eq.${encodeURIComponent(oldItem.id)}`, rtpItemToRow(item, pkgId));
-      pkg.rtpItems[idx] = { ...item, id: oldItem.id, riskId: oldItem.riskId };
+      pkg.rtpItems[idx] = { ...oldItem, ...item, id: oldItem.id };
       sbAuditLog('RTP_UPDATE', oldItem.id, pkgId, null, null);
       showToast('💾 Pemantauan RTP diperbarui');
     } else {
@@ -2529,11 +2711,74 @@ async function deleteRTPEntry(pkgId, idx) {
   }
 }
 
+// ─── Toggle approval Pokja Pengawasan untuk satu entri RTP ───
+async function toggleApprRTP(pkgId, idx, btn) {
+  const pkg = packages[pkgId];
+  const it  = pkg?.rtpItems?.[idx];
+  if (!it) return;
+
+  const oldVal = it.apprRtp;
+  it.apprRtp = !it.apprRtp;
+  btn.className   = `appr-toggle ${it.apprRtp?'appr-on':'appr-off'}`;
+  btn.textContent = it.apprRtp ? '✓ Terverifikasi' : '— Belum';
+  cacheLocalData();
+
+  if (!sbUser) return;
+  try {
+    await SB.patch('rtp_monitoring', `id=eq.${encodeURIComponent(it.id)}`, { appr_rtp: it.apprRtp });
+    sbAuditLog('RTP_UPDATE', it.id, pkgId, { appr_rtp: oldVal }, { appr_rtp: it.apprRtp });
+  } catch(e) {
+    it.apprRtp = oldVal;
+    btn.className   = `appr-toggle ${it.apprRtp?'appr-on':'appr-off'}`;
+    btn.textContent = it.apprRtp ? '✓ Terverifikasi' : '— Belum';
+    showToast('❌ Gagal update verifikasi: ' + e.message, 4000);
+    console.error('[SB RTP Appr]', e);
+  }
+}
+
+// ─── Simpan catatan Pokja Pengawasan untuk satu entri RTP ───
+async function saveCatatanRTP(pkgId, idx, el) {
+  const pkg = packages[pkgId];
+  const it  = pkg?.rtpItems?.[idx];
+  if (!it) return;
+
+  const oldVal = it.catatanApprRtp || '';
+  const newVal = el.value;
+  if (oldVal === newVal) return;
+  it.catatanApprRtp = newVal;
+  cacheLocalData();
+
+  if (!sbUser) return;
+  try {
+    await SB.patch('rtp_monitoring', `id=eq.${encodeURIComponent(it.id)}`, { catatan_appr_rtp: newVal });
+    sbAuditLog('RTP_UPDATE', it.id, pkgId, { catatan_appr_rtp: oldVal }, { catatan_appr_rtp: newVal });
+    showToast('💾 Catatan disimpan', 1500);
+  } catch(e) {
+    it.catatanApprRtp = oldVal;
+    el.value = oldVal;
+    showToast('❌ Gagal menyimpan catatan: ' + e.message, 4000);
+    console.error('[SB RTP Catatan]', e);
+  }
+}
+
+// ─── Badge warna status realisasi ───
+function rtpStatusBadge(status) {
+  const map = {
+    'Belum Mulai':              { c:'#6a90b8', bg:'rgba(106,144,184,0.12)', i:'⚪' },
+    'On Track':                 { c:'#4ade80', bg:'rgba(74,222,128,0.12)',  i:'🟢' },
+    'Terlambat':                { c:'#ff8c00', bg:'rgba(255,140,0,0.12)',   i:'🟠' },
+    'Berisiko Tidak Tercapai':  { c:'#ff3b3b', bg:'rgba(255,59,59,0.12)',   i:'🔴' },
+    'Selesai':                  { c:'#00d8ff', bg:'rgba(0,216,255,0.12)',  i:'✅' },
+  };
+  const s = map[status] || map['Belum Mulai'];
+  return `<span style="display:inline-block;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:600;color:${s.c};background:${s.bg}">${s.i} ${escTa(status||'-')}</span>`;
+}
+
 // ── TAB 6: PEMANTAUAN RTP ────────────────────
 function renderPemantauanRTP(pkg) {
   const infobox = `<div class="infobox gold">
     <span class="infobox-icon">🧭</span>
-    <div><strong>Pemantauan Rencana Tindak Pengendalian (RTP)</strong> — mengikuti format Lampiran B SE Menteri PUPR 12/2024, diisi berkala per semester. Tahap ini: Pernyataan Risiko &amp; Respon Risiko masih diisi manual — penarikan otomatis dari tab Pengendalian menyusul pada tahap berikutnya.</div>
+    <div><strong>Pemantauan Rencana Tindak Pengendalian (RTP)</strong> — mengikuti format Lampiran B SE Menteri PUPR 12/2024, diisi berkala per semester. Pernyataan Risiko, Respon Risiko, RTP, Penanggung Jawab &amp; Indikator dapat ditarik otomatis dari risiko terdaftar di tab Pengendalian — tetap bisa disunting bila perlu penyesuaian periode ini.</div>
   </div>`;
 
   if (!pkg.rtpItems) {
@@ -2545,7 +2790,7 @@ function renderPemantauanRTP(pkg) {
   const rows = items.map((it,i) => `
     <tr>
       <td class="num">${i+1}</td>
-      <td style="font-size:11px;white-space:nowrap">${it.tahun} / Sem ${it.semester}</td>
+      <td style="font-size:11px;white-space:nowrap">${it.tahun} / Sem ${it.semester}${it.riskId?`<div style="color:var(--accent);margin-top:2px">🔗 ${escTa(it.riskId)}</div>`:''}</td>
       <td style="font-size:11px;min-width:180px;white-space:pre-line">${escTa(it.pernyataanRisiko)}</td>
       <td style="font-size:11px;min-width:140px;white-space:pre-line">${escTa(it.responRisiko)}</td>
       <td style="font-size:11px;min-width:200px;white-space:pre-line">${escTa(it.rencanaTindak)}</td>
@@ -2554,8 +2799,19 @@ function renderPemantauanRTP(pkg) {
       <td style="font-size:11px;white-space:nowrap">${escTa(it.targetWaktu)}</td>
       <td style="font-size:11px;white-space:nowrap">${escTa(it.realisasiWaktu)}</td>
       <td style="font-size:11px;min-width:180px;white-space:pre-line">${escTa(it.hasilPemantauan)}</td>
-      <td style="font-size:11px;min-width:140px;color:var(--slate);white-space:pre-line">${escTa(it.hambatan)}</td>
+      <td style="font-size:11px;white-space:nowrap">${it.persenRealisasi||0}%<br>${rtpStatusBadge(it.statusRealisasi)}</td>
+      <td style="font-size:11px;min-width:140px;color:var(--slate)">
+        ${it.hambatanKategori?`<span class="badge" style="margin-bottom:4px;display:inline-block">${escTa(it.hambatanKategori)}</span><br>`:''}
+        <span style="white-space:pre-line">${escTa(it.hambatan)}</span>
+      </td>
       <td style="font-size:11px">${it.linkBukti ? `<a href="${escTa(it.linkBukti)}" target="_blank" rel="noopener">🔗 Buka</a>` : '–'}</td>
+      <td style="text-align:center;min-width:110px">
+        <button class="appr-toggle ${it.apprRtp?'appr-on':'appr-off'}" onclick="toggleApprRTP('${pkg.id}',${i},this)">
+          ${it.apprRtp?'✓ Terverifikasi':'— Belum'}
+        </button>
+        <textarea class="catatan-input" rows="2" placeholder="Catatan Pokja Pengawasan..." style="margin-top:6px"
+          onblur="saveCatatanRTP('${pkg.id}',${i},this)">${escTa(it.catatanApprRtp)}</textarea>
+      </td>
       <td style="white-space:nowrap">
         <button class="row-edit-btn" onclick="openAddRTP('${pkg.id}',${i})">✏️</button>
         <button class="row-del-btn" onclick="deleteRTPEntry('${pkg.id}',${i})">🗑</button>
@@ -2571,9 +2827,10 @@ function renderPemantauanRTP(pkg) {
       <thead><tr>
         <th>No</th><th>Periode</th><th>Pernyataan Risiko</th><th>Respon Risiko</th><th>Rencana Tindak (RTP)</th>
         <th>Penanggung Jawab</th><th>Indikator</th><th>Target Waktu</th><th>Realisasi Waktu</th>
-        <th>Hasil Pemantauan</th><th>Hambatan/Kendala</th><th>Bukti Dukung</th><th>Aksi</th>
+        <th>Hasil Pemantauan</th><th>% / Status</th><th>Hambatan/Kendala</th><th>Bukti Dukung</th>
+        <th>Verifikasi Pengawasan</th><th>Aksi</th>
       </tr></thead>
-      <tbody>${rows || `<tr><td colspan="13" style="text-align:center;color:var(--slate);padding:20px">Belum ada data pemantauan. Klik "+ Tambah Pemantauan" untuk mulai.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="15" style="text-align:center;color:var(--slate);padding:20px">Belum ada data pemantauan. Klik "+ Tambah Pemantauan" untuk mulai.</td></tr>`}</tbody>
     </table></div>
   </div>`;
 }
