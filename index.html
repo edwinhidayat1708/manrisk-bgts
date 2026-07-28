@@ -1548,13 +1548,105 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
   </div>
 </div>
 
+<!-- ═══ MODAL: PEMANTAUAN RTP (Lampiran B SE Menteri PUPR 12/2024) ═══ -->
+<div class="modal-overlay" id="rtp-modal" onclick="if(event.target===this)closeModal('rtp-modal')">
+  <div class="modal" style="width:min(680px,95vw)">
+    <div class="modal-head">
+      <span class="modal-title" id="rtp-modal-title">+ Tambah Pemantauan RTP</span>
+      <button class="modal-close" onclick="closeModal('rtp-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rtp-pkg-id">
+      <input type="hidden" id="rtp-edit-idx">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tahun <span class="required-star">*</span></label>
+          <input class="form-input" id="rtp-tahun" type="number" placeholder="2026">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Semester <span class="required-star">*</span></label>
+          <select class="form-select" id="rtp-semester">
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Pernyataan Risiko <span class="required-star">*</span></label>
+        <textarea class="form-textarea" id="rtp-pernyataan" placeholder="Uraian pernyataan risiko yang dipantau (manual untuk saat ini)..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Respon Risiko</label>
+        <textarea class="form-textarea" id="rtp-respon" placeholder="Mis. Mengurangi Kemungkinan / Mengurangi Dampak..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Rencana Tindak Pengendalian (RTP) <span class="required-star">*</span></label>
+        <textarea class="form-textarea" id="rtp-rencana" placeholder="Uraian rencana tindak pengendalian..."></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Penanggung Jawab RTP</label>
+          <input class="form-input" id="rtp-pj" placeholder="Kasub.bag UTU, Ka. Tim...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Indikator (Keluaran)</label>
+          <input class="form-input" id="rtp-indikator" placeholder="Program Kalibrasi, Sertifikat, dll...">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Target Waktu</label>
+          <input class="form-input" id="rtp-target" placeholder="31 Desember 2026">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Realisasi Waktu</label>
+          <input class="form-input" id="rtp-realisasi" placeholder="30 Juni 2026">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Hasil Pemantauan</label>
+        <textarea class="form-textarea" id="rtp-hasil" placeholder="Uraian capaian/realisasi RTP sampai periode ini..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Hambatan / Kendala</label>
+        <textarea class="form-textarea" id="rtp-hambatan" placeholder="Kendala yang dihadapi dalam pelaksanaan RTP..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Link Bukti Dukung</label>
+        <input class="form-input" id="rtp-link" placeholder="https://drive.google.com/...">
+      </div>
+
+      <button class="topbar-action btn-primary" style="width:100%;justify-content:center;margin-top:8px;padding:12px" onclick="saveRTPForm()">✅ Simpan Pemantauan RTP</button>
+    </div>
+  </div>
+</div>
+
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-23 (2026-07-25) — Catatan approval per-tab (Tatalaksana/Akuntabilitas/Pengawasan),
-//  hapus approval Residual, Matriks Risiko disesuaikan SE Menteri PUPR 12/2024 + Garis Toleransi —
-//           warna teks toast sebelumnya ikut variabel --text-main yang berubah gelap di
-//           light mode, padahal latar kotak toast selalu gelap. Sekarang warna teks dikunci.
+//  VERSI: v5-24 (2026-07-28) — Tab baru "Pemantauan RTP" (Tahap 1 dari Lampiran B
+//  SE Menteri PUPR 12/2024). Fondasi data & CRUD dasar: tambah/edit/hapus entri
+//  pemantauan per paket (Tahun, Semester, Pernyataan Risiko, Respon Risiko, RTP,
+//  Penanggung Jawab, Indikator, Target/Realisasi Waktu, Hasil Pemantauan,
+//  Hambatan/Kendala, Link Bukti Dukung), tersimpan ke tabel Supabase baru
+//  `rtp_monitoring` + tercatat di audit log (RTP_INSERT/RTP_UPDATE/RTP_DELETE).
+//  CATATAN: Pernyataan Risiko & Respon Risiko MASIH MANUAL — auto-pull dari
+//  tab Pengendalian direncanakan di Tahap 2. Tidak ada perubahan pada tabel
+//  `packages`/`risks` maupun tab-tab lama (Identifikasi..Matrik).
+//
+//  VERSI SEBELUMNYA: v5-23 (2026-07-25) — Catatan approval per-tab (Tatalaksana/Akuntabilitas/
+//  Pengawasan), hapus approval Residual, Matriks Risiko disesuaikan SE Menteri PUPR 12/2024 +
+//  Garis Toleransi — warna teks toast sebelumnya ikut variabel --text-main yang berubah gelap
+//  di light mode, padahal latar kotak toast selalu gelap. Sekarang warna teks dikunci.
 //  CHANGES: fix auto-load setelah login — gsUpdateUI tidak lagi trigger auto-save
 //           sebelum data selesai dimuat (skipSync=true pada semua jalur login)
 //  CHANGES: versi dicatat di dalam kode HTML (title + comment JS)
@@ -2263,6 +2355,230 @@ async function saveCatatan(pkgId, rIdx, field, el) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  PEMANTAUAN RTP — Lampiran B SE Menteri PUPR 12/2024
+//  Tahap 1: fondasi data & tab (Pernyataan/Respon Risiko
+//  masih input manual — belum auto-pull dari Pengendalian)
+// ═══════════════════════════════════════════════════════
+function rtpRowToItem(row) {
+  return {
+    id:               row.id,
+    riskId:           row.risk_id || '',
+    tahun:            row.tahun,
+    semester:         row.semester,
+    pernyataanRisiko: row.pernyataan_risiko || '',
+    responRisiko:     row.respon_risiko || '',
+    rencanaTindak:    row.rencana_tindak || '',
+    penanggungJawab:  row.penanggung_jawab || '',
+    indikator:        row.indikator || '',
+    targetWaktu:      row.target_waktu || '',
+    realisasiWaktu:   row.realisasi_waktu || '',
+    hasilPemantauan:  row.hasil_pemantauan || '',
+    hambatan:         row.hambatan || '',
+    linkBukti:        row.link_bukti || '',
+  };
+}
+
+function rtpItemToRow(item, pkgId) {
+  const pkg = packages[pkgId];
+  return {
+    pkg_id:            pkgId,
+    pkg_name:          pkg?.name || pkgId,
+    risk_id:           item.riskId || null,
+    tahun:             item.tahun,
+    semester:          item.semester,
+    pernyataan_risiko: item.pernyataanRisiko || '',
+    respon_risiko:     item.responRisiko || '',
+    rencana_tindak:    item.rencanaTindak || '',
+    penanggung_jawab:  item.penanggungJawab || '',
+    indikator:         item.indikator || '',
+    target_waktu:      item.targetWaktu || '',
+    realisasi_waktu:   item.realisasiWaktu || '',
+    hasil_pemantauan:  item.hasilPemantauan || '',
+    hambatan:          item.hambatan || '',
+    link_bukti:        item.linkBukti || '',
+  };
+}
+
+// ─── Muat data Pemantauan RTP untuk satu paket (lazy-load, sekali per paket) ───
+async function loadRTPForPkg(pkgId) {
+  const pkg = packages[pkgId];
+  if (!pkg) return;
+  if (!sbUser) {
+    pkg.rtpItems = [];
+    pkg._rtpLoading = false;
+    if (currentPage === pkgId) renderPkgTab(pkgId, currentTab[pkgId]||0);
+    return;
+  }
+  try {
+    const rows = await SB.get('rtp_monitoring', `?select=*&pkg_id=eq.${encodeURIComponent(pkgId)}&order=tahun.desc,semester.desc,created_at.desc`);
+    pkg.rtpItems = rows.map(rtpRowToItem);
+  } catch(e) {
+    pkg.rtpItems = [];
+    showToast('❌ Gagal memuat Pemantauan RTP: ' + e.message, 4000);
+    console.error('[SB RTP Load]', e);
+  } finally {
+    pkg._rtpLoading = false;
+    cacheLocalData();
+    if (currentPage === pkgId && (currentTab[pkgId]||0) === 6) renderPkgTab(pkgId, 6);
+  }
+}
+
+// ─── Buka modal tambah / edit ───
+function openAddRTP(pkgId, idx) {
+  const pkg = packages[pkgId];
+  const item = (idx !== undefined && idx !== null && pkg?.rtpItems) ? pkg.rtpItems[idx] : null;
+
+  document.getElementById('rtp-pkg-id').value    = pkgId;
+  document.getElementById('rtp-edit-idx').value  = (idx===undefined||idx===null) ? '' : idx;
+  document.getElementById('rtp-modal-title').textContent = item ? '✏️ Ubah Pemantauan RTP' : '+ Tambah Pemantauan RTP';
+
+  document.getElementById('rtp-tahun').value     = item?.tahun     || new Date().getFullYear();
+  document.getElementById('rtp-semester').value  = item?.semester  || '1';
+  document.getElementById('rtp-pernyataan').value= item?.pernyataanRisiko || '';
+  document.getElementById('rtp-respon').value    = item?.responRisiko    || '';
+  document.getElementById('rtp-rencana').value   = item?.rencanaTindak   || '';
+  document.getElementById('rtp-pj').value        = item?.penanggungJawab || '';
+  document.getElementById('rtp-indikator').value = item?.indikator       || '';
+  document.getElementById('rtp-target').value    = item?.targetWaktu     || '';
+  document.getElementById('rtp-realisasi').value = item?.realisasiWaktu  || '';
+  document.getElementById('rtp-hasil').value     = item?.hasilPemantauan || '';
+  document.getElementById('rtp-hambatan').value  = item?.hambatan        || '';
+  document.getElementById('rtp-link').value      = item?.linkBukti       || '';
+
+  document.getElementById('rtp-modal').classList.add('open');
+}
+
+// ─── Simpan (insert / update) ke Supabase ───
+async function saveRTPForm() {
+  const pkgId  = document.getElementById('rtp-pkg-id').value;
+  const idxRaw = document.getElementById('rtp-edit-idx').value;
+  const idx    = idxRaw === '' ? null : parseInt(idxRaw, 10);
+  const pkg    = packages[pkgId];
+  if (!pkg) return;
+
+  const pernyataan = document.getElementById('rtp-pernyataan').value.trim();
+  const rencana    = document.getElementById('rtp-rencana').value.trim();
+  if (!pernyataan || !rencana) {
+    alert('Pernyataan Risiko dan Rencana Tindak Pengendalian wajib diisi.');
+    return;
+  }
+  if (!sbUser) {
+    alert('Login dulu untuk menyimpan data Pemantauan RTP ke Supabase.');
+    return;
+  }
+
+  const item = {
+    tahun:            parseInt(document.getElementById('rtp-tahun').value, 10) || new Date().getFullYear(),
+    semester:         document.getElementById('rtp-semester').value,
+    pernyataanRisiko: pernyataan,
+    responRisiko:     document.getElementById('rtp-respon').value.trim(),
+    rencanaTindak:    rencana,
+    penanggungJawab:  document.getElementById('rtp-pj').value.trim(),
+    indikator:        document.getElementById('rtp-indikator').value.trim(),
+    targetWaktu:      document.getElementById('rtp-target').value.trim(),
+    realisasiWaktu:   document.getElementById('rtp-realisasi').value.trim(),
+    hasilPemantauan:  document.getElementById('rtp-hasil').value.trim(),
+    hambatan:         document.getElementById('rtp-hambatan').value.trim(),
+    linkBukti:        document.getElementById('rtp-link').value.trim(),
+  };
+
+  try {
+    if (idx !== null && pkg.rtpItems && pkg.rtpItems[idx]) {
+      const oldItem = pkg.rtpItems[idx];
+      await SB.patch('rtp_monitoring', `id=eq.${encodeURIComponent(oldItem.id)}`, rtpItemToRow(item, pkgId));
+      pkg.rtpItems[idx] = { ...item, id: oldItem.id, riskId: oldItem.riskId };
+      sbAuditLog('RTP_UPDATE', oldItem.id, pkgId, null, null);
+      showToast('💾 Pemantauan RTP diperbarui');
+    } else {
+      const result  = await SB.post('rtp_monitoring', rtpItemToRow(item, pkgId));
+      const newRow  = Array.isArray(result) ? result[0] : result;
+      const newItem = rtpRowToItem(newRow);
+      if (!pkg.rtpItems) pkg.rtpItems = [];
+      pkg.rtpItems.unshift(newItem);
+      sbAuditLog('RTP_INSERT', newItem.id, pkgId, null, null);
+      showToast('✅ Pemantauan RTP tersimpan');
+    }
+    cacheLocalData();
+    closeModal('rtp-modal');
+    if (currentPage === pkgId) renderPkgTab(pkgId, currentTab[pkgId]||0);
+  } catch(e) {
+    showToast('❌ Gagal menyimpan Pemantauan RTP: ' + e.message, 5000);
+    console.error('[SB RTP Save]', e);
+  }
+}
+
+// ─── Hapus entri Pemantauan RTP ───
+async function deleteRTPEntry(pkgId, idx) {
+  const pkg = packages[pkgId];
+  if (!pkg || !pkg.rtpItems || !pkg.rtpItems[idx]) return;
+  if (!confirm('Hapus data Pemantauan RTP ini?')) return;
+  const item = pkg.rtpItems[idx];
+
+  try {
+    if (sbUser) {
+      await SB.delete('rtp_monitoring', `id=eq.${encodeURIComponent(item.id)}`);
+      sbAuditLog('RTP_DELETE', item.id, pkgId, null, null);
+    }
+    pkg.rtpItems.splice(idx, 1);
+    cacheLocalData();
+    showToast('🗑 Pemantauan RTP dihapus');
+    if (currentPage === pkgId) renderPkgTab(pkgId, currentTab[pkgId]||0);
+  } catch(e) {
+    showToast('❌ Gagal menghapus Pemantauan RTP: ' + e.message, 4000);
+    console.error('[SB RTP Delete]', e);
+  }
+}
+
+// ── TAB 6: PEMANTAUAN RTP ────────────────────
+function renderPemantauanRTP(pkg) {
+  const infobox = `<div class="infobox gold">
+    <span class="infobox-icon">🧭</span>
+    <div><strong>Pemantauan Rencana Tindak Pengendalian (RTP)</strong> — mengikuti format Lampiran B SE Menteri PUPR 12/2024, diisi berkala per semester. Tahap ini: Pernyataan Risiko &amp; Respon Risiko masih diisi manual — penarikan otomatis dari tab Pengendalian menyusul pada tahap berikutnya.</div>
+  </div>`;
+
+  if (!pkg.rtpItems) {
+    if (!pkg._rtpLoading) { pkg._rtpLoading = true; loadRTPForPkg(pkg.id); }
+    return infobox + `<div class="card"><div style="padding:32px;text-align:center;color:var(--slate)">⏳ Memuat data Pemantauan RTP dari Supabase...</div></div>`;
+  }
+
+  const items = pkg.rtpItems;
+  const rows = items.map((it,i) => `
+    <tr>
+      <td class="num">${i+1}</td>
+      <td style="font-size:11px;white-space:nowrap">${it.tahun} / Sem ${it.semester}</td>
+      <td style="font-size:11px;min-width:180px;white-space:pre-line">${escTa(it.pernyataanRisiko)}</td>
+      <td style="font-size:11px;min-width:140px;white-space:pre-line">${escTa(it.responRisiko)}</td>
+      <td style="font-size:11px;min-width:200px;white-space:pre-line">${escTa(it.rencanaTindak)}</td>
+      <td style="font-size:11px;min-width:120px">${escTa(it.penanggungJawab)}</td>
+      <td style="font-size:11px;min-width:140px;white-space:pre-line">${escTa(it.indikator)}</td>
+      <td style="font-size:11px;white-space:nowrap">${escTa(it.targetWaktu)}</td>
+      <td style="font-size:11px;white-space:nowrap">${escTa(it.realisasiWaktu)}</td>
+      <td style="font-size:11px;min-width:180px;white-space:pre-line">${escTa(it.hasilPemantauan)}</td>
+      <td style="font-size:11px;min-width:140px;color:var(--slate);white-space:pre-line">${escTa(it.hambatan)}</td>
+      <td style="font-size:11px">${it.linkBukti ? `<a href="${escTa(it.linkBukti)}" target="_blank" rel="noopener">🔗 Buka</a>` : '–'}</td>
+      <td style="white-space:nowrap">
+        <button class="row-edit-btn" onclick="openAddRTP('${pkg.id}',${i})">✏️</button>
+        <button class="row-del-btn" onclick="deleteRTPEntry('${pkg.id}',${i})">🗑</button>
+      </td>
+    </tr>`).join('');
+
+  return infobox + `<div class="card">
+    <div class="card-head">
+      <div class="card-title">🧭 Pemantauan RTP (${items.length} entri)</div>
+      <button class="topbar-action btn-ghost" onclick="openAddRTP('${pkg.id}')">+ Tambah Pemantauan</button>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>No</th><th>Periode</th><th>Pernyataan Risiko</th><th>Respon Risiko</th><th>Rencana Tindak (RTP)</th>
+        <th>Penanggung Jawab</th><th>Indikator</th><th>Target Waktu</th><th>Realisasi Waktu</th>
+        <th>Hasil Pemantauan</th><th>Hambatan/Kendala</th><th>Bukti Dukung</th><th>Aksi</th>
+      </tr></thead>
+      <tbody>${rows || `<tr><td colspan="13" style="text-align:center;color:var(--slate);padding:20px">Belum ada data pemantauan. Klik "+ Tambah Pemantauan" untuk mulai.</td></tr>`}</tbody>
+    </table></div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
 //  BACKUP PAGE — Diganti dengan Audit Log viewer
 // ═══════════════════════════════════════════════════════
 async function initBackupPage() {
@@ -2580,6 +2896,7 @@ function buildPkgPage(pkgId) {
       <button class="tab-btn" onclick="switchTab('${pkgId}',3)">🛡️ Pengendalian</button>
       <button class="tab-btn" onclick="switchTab('${pkgId}',4)">🔄 Residual</button>
       <button class="tab-btn" onclick="switchTab('${pkgId}',5)">🎯 Matrik</button>
+      <button class="tab-btn" onclick="switchTab('${pkgId}',6)">🧭 Pemantauan RTP</button>
     </div>
     <div id="content-${pkgId}"></div>`;
   wrap.appendChild(div);
@@ -2593,7 +2910,7 @@ function renderPkgTab(pkgId, tabIdx) {
   // Update banner
   const banner = document.querySelector(`#page-${pkgId} .pkg-detail`);
   if(banner) banner.textContent = `Anggaran: ${fmt(pkg.anggaran)} · ${pkg.risks.length} Risiko`;
-  const fns = [renderIdent,renderAnalisa,renderEvaluasi,renderPengendalian,renderResidual,renderMatrik];
+  const fns = [renderIdent,renderAnalisa,renderEvaluasi,renderPengendalian,renderResidual,renderMatrik,renderPemantauanRTP];
   el.innerHTML = fns[tabIdx](pkg);
 }
 
