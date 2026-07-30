@@ -1701,10 +1701,134 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
   </div>
 </div>
 
+<!-- ═══ MODAL: TINJAUAN ATAS RISIKO BARU (Lampiran C SE Menteri PUPR 12/2024) ═══ -->
+<div class="modal-overlay" id="trb-modal" onclick="if(event.target===this)closeModal('trb-modal')">
+  <div class="modal" style="width:min(640px,95vw)">
+    <div class="modal-head">
+      <span class="modal-title" id="trb-modal-title">+ Tambah Tinjauan Risiko Baru</span>
+      <button class="modal-close" onclick="closeModal('trb-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="trb-pkg-id">
+      <input type="hidden" id="trb-edit-idx">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tahun <span class="required-star">*</span></label>
+          <input class="form-input" id="trb-tahun" type="number" placeholder="2026">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Semester <span class="required-star">*</span></label>
+          <select class="form-select" id="trb-semester">
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nama Kejadian <span class="required-star">*</span></label>
+        <input class="form-input" id="trb-nama-kejadian" placeholder="Nama singkat kejadian/temuan...">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Pernyataan Risiko <span class="required-star">*</span></label>
+        <textarea class="form-textarea" id="trb-pernyataan" placeholder="Uraian pernyataan risiko baru yang ditemukan..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Penyebab Risiko</label>
+        <textarea class="form-textarea" id="trb-penyebab" placeholder="Uraian penyebab risiko..."></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Skor Kemungkinan (K) <span class="required-star">*</span></label>
+          <select class="form-select" id="trb-skor-k" onchange="recalcTRBBesaran()">
+            <option value="1">1 — Hampir tidak terjadi</option>
+            <option value="2">2 — Jarang terjadi</option>
+            <option value="3">3 — Kadang terjadi</option>
+            <option value="4">4 — Sering terjadi</option>
+            <option value="5">5 — Hampir pasti terjadi</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Skor Dampak (D) <span class="required-star">*</span></label>
+          <select class="form-select" id="trb-skor-d" onchange="recalcTRBBesaran()">
+            <option value="1">1 — Tidak Signifikan</option>
+            <option value="2">2 — Minor</option>
+            <option value="3">3 — Moderat</option>
+            <option value="4">4 — Signifikan</option>
+            <option value="5">5 — Sangat Signifikan</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Besaran &amp; Level Risiko <span style="font-weight:400;color:var(--slate)">(otomatis, sesuai Tabel 10 SE Menteri PUPR 12/2024)</span></label>
+        <div id="trb-besaran-display" style="padding:10px 12px;border-radius:6px;background:rgba(0,0,0,0.15);font-size:13px;font-weight:700"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Respon Risiko</label>
+        <textarea class="form-textarea" id="trb-respon" placeholder="Rencana respon awal — mis. Mengurangi Kemungkinan / Mengurangi Dampak..."></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Status Tinjauan</label>
+          <select class="form-select" id="trb-status">
+            <option value="Baru Ditemukan">🆕 Baru Ditemukan</option>
+            <option value="Dalam Kajian Pokja">🔎 Dalam Kajian Pokja</option>
+            <option value="Disetujui">✅ Disetujui (jadi risiko resmi)</option>
+            <option value="Ditolak">🚫 Ditolak (tidak signifikan)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sumber Temuan</label>
+          <select class="form-select" id="trb-sumber">
+            <option value="">— Pilih sumber —</option>
+            <option value="Monitoring RTP">Monitoring RTP</option>
+            <option value="Audit Internal">Audit Internal</option>
+            <option value="Insiden Lapangan">Insiden Lapangan</option>
+            <option value="Usulan Pegawai">Usulan Pegawai</option>
+            <option value="Evaluasi Eksternal">Evaluasi Eksternal</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Catatan</label>
+        <textarea class="form-textarea" id="trb-catatan" placeholder="Catatan tambahan dari Pokja..."></textarea>
+      </div>
+
+      <button class="topbar-action btn-primary" style="width:100%;justify-content:center;margin-top:8px;padding:12px" onclick="saveTRBForm()">✅ Simpan Tinjauan Risiko Baru</button>
+    </div>
+  </div>
+</div>
+
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-27 (2026-07-28) — Animasi perpindahan badge risiko di tab
+//  VERSI: v5-28 (2026-07-28) — Tab baru "Tinjauan Risiko Baru" (Tahap 1
+//  dari Lampiran C SE Menteri PUPR 12/2024). Fondasi data & CRUD dasar:
+//  tambah/edit/hapus entri per paket (Tahun, Semester, Nama Kejadian,
+//  Pernyataan Risiko, Penyebab Risiko, Skor K/D, Respon Risiko, Status
+//  Tinjauan, Sumber Temuan, Catatan). Besaran & Level Risiko dihitung
+//  OTOMATIS memakai govMatrixValue()/bobotLabel()/bobotColor() yang sama
+//  persis dengan tab Matrik — bukan tabel terpisah, sesuai catatan
+//  sebelumnya (satu sumber kebenaran untuk Tabel 10 SE Menteri PUPR 12/2024).
+//  Tersimpan ke tabel Supabase baru `tinjauan_risiko_baru` + tercatat di
+//  audit log (TRB_INSERT/TRB_UPDATE/TRB_DELETE).
+//  BELUM DIKERJAKAN (rencana tahap berikutnya): tombol "Jadikan Risiko
+//  Resmi" (auto-promosi ke tab Identifikasi), approval Pokja sebelum
+//  promosi, notifikasi/badge risiko baru menunggu tinjauan, EMV kasar/
+//  estimasi awal, log historis agregat per semester.
+//  Tidak ada perubahan pada tabel `packages`/`risks`/`rtp_monitoring`
+//  maupun tab-tab lama.
+//
+//  VERSI SEBELUMNYA: v5-27 (2026-07-28) — Animasi perpindahan badge risiko di tab
 //  Matrik: setiap kali tab dibuka, badge tiap risiko "terbang" dari posisi
 //  Inherent Risk ke posisi Residual Risk (untuk SEMUA risiko, termasuk yang
 //  posisinya tidak berubah). Badge di sisi Inherent diberi efek cahaya
@@ -3013,6 +3137,264 @@ function renderPemantauanRTP(pkg) {
 }
 
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  TINJAUAN ATAS RISIKO BARU — Lampiran C SE Menteri PUPR 12/2024
+//  Tahap 1: fondasi data & tab, Besaran/Level Risiko dihitung otomatis
+//  lewat govMatrixValue() (sumber kebenaran yang sama dengan tab Matrik).
+//  BELUM DIKERJAKAN (rencana tahap berikutnya): tombol "Jadikan Risiko
+//  Resmi" (promosi ke tab Identifikasi), approval Pokja sebelum promosi,
+//  notifikasi/badge risiko baru menunggu tinjauan, EMV kasar/estimasi awal.
+// ═══════════════════════════════════════════════════════
+function trbRowToItem(row) {
+  return {
+    id:               row.id,
+    tahun:            row.tahun,
+    semester:         row.semester,
+    namaKejadian:     row.nama_kejadian || '',
+    pernyataanRisiko: row.pernyataan_risiko || '',
+    penyebabRisiko:   row.penyebab_risiko || '',
+    skorK:            parseInt(row.skor_k) || 1,
+    skorD:            parseInt(row.skor_d) || 1,
+    besaranRisiko:    parseInt(row.besaran_risiko) || 1,
+    levelRisiko:      row.level_risiko || '',
+    responRisiko:     row.respon_risiko || '',
+    statusTinjauan:   row.status_tinjauan || 'Baru Ditemukan',
+    sumberTemuan:     row.sumber_temuan || '',
+    catatan:          row.catatan || '',
+  };
+}
+
+function trbItemToRow(item, pkgId) {
+  const pkg = packages[pkgId];
+  return {
+    pkg_id:            pkgId,
+    pkg_name:          pkg?.name || pkgId,
+    tahun:             item.tahun,
+    semester:          item.semester,
+    nama_kejadian:     item.namaKejadian || '',
+    pernyataan_risiko: item.pernyataanRisiko || '',
+    penyebab_risiko:   item.penyebabRisiko || '',
+    skor_k:            item.skorK,
+    skor_d:            item.skorD,
+    besaran_risiko:    item.besaranRisiko,
+    level_risiko:      item.levelRisiko,
+    respon_risiko:     item.responRisiko || '',
+    status_tinjauan:   item.statusTinjauan || 'Baru Ditemukan',
+    sumber_temuan:     item.sumberTemuan || null,
+    catatan:           item.catatan || '',
+  };
+}
+
+// ─── Hitung ulang Besaran & Level Risiko (dari lookup Tabel 10 yang sama dengan tab Matrik) ───
+function recalcTRBBesaran() {
+  const k = parseInt(document.getElementById('trb-skor-k').value, 10) || 1;
+  const d = parseInt(document.getElementById('trb-skor-d').value, 10) || 1;
+  const besaran = govMatrixValue(k, d);
+  const label   = bobotLabel(besaran);
+  const color   = bobotColor(besaran);
+  document.getElementById('trb-besaran-display').innerHTML =
+    `<span style="background:${color.bg};color:${color.c};padding:3px 10px;border-radius:5px">${besaran}</span> &nbsp; ${label}${inGovTolerance(k,d)?' <span style="color:#a78bfa;font-weight:400">(dalam Garis Toleransi)</span>':''}`;
+}
+
+// ─── Muat data Tinjauan Risiko Baru untuk satu paket (lazy-load) ───
+async function loadTRBForPkg(pkgId) {
+  const pkg = packages[pkgId];
+  if (!pkg) return;
+  if (!sbUser) {
+    pkg.trbItems = [];
+    pkg._trbLoading = false;
+    if (currentPage === pkgId) renderPkgTab(pkgId, currentTab[pkgId]||0);
+    return;
+  }
+  try {
+    const rows = await SB.get('tinjauan_risiko_baru', `?select=*&pkg_id=eq.${encodeURIComponent(pkgId)}&order=tahun.desc,semester.desc,created_at.desc`);
+    pkg.trbItems = rows.map(trbRowToItem);
+  } catch(e) {
+    pkg.trbItems = [];
+    showToast('❌ Gagal memuat Tinjauan Risiko Baru: ' + e.message, 4000);
+    console.error('[SB TRB Load]', e);
+  } finally {
+    pkg._trbLoading = false;
+    cacheLocalData();
+    if (currentPage === pkgId && (currentTab[pkgId]||0) === 7) renderPkgTab(pkgId, 7);
+  }
+}
+
+// ─── Buka modal tambah / edit ───
+function openAddTRB(pkgId, idx) {
+  const pkg = packages[pkgId];
+  const item = (idx !== undefined && idx !== null && pkg?.trbItems) ? pkg.trbItems[idx] : null;
+
+  document.getElementById('trb-pkg-id').value   = pkgId;
+  document.getElementById('trb-edit-idx').value = (idx===undefined||idx===null) ? '' : idx;
+  document.getElementById('trb-modal-title').textContent = item ? '✏️ Ubah Tinjauan Risiko Baru' : '+ Tambah Tinjauan Risiko Baru';
+
+  document.getElementById('trb-tahun').value          = item?.tahun     || new Date().getFullYear();
+  document.getElementById('trb-semester').value       = item?.semester  || '1';
+  document.getElementById('trb-nama-kejadian').value  = item?.namaKejadian     || '';
+  document.getElementById('trb-pernyataan').value     = item?.pernyataanRisiko || '';
+  document.getElementById('trb-penyebab').value       = item?.penyebabRisiko   || '';
+  document.getElementById('trb-skor-k').value         = item?.skorK || 1;
+  document.getElementById('trb-skor-d').value         = item?.skorD || 1;
+  document.getElementById('trb-respon').value         = item?.responRisiko    || '';
+  document.getElementById('trb-status').value         = item?.statusTinjauan  || 'Baru Ditemukan';
+  document.getElementById('trb-sumber').value         = item?.sumberTemuan    || '';
+  document.getElementById('trb-catatan').value        = item?.catatan        || '';
+
+  recalcTRBBesaran();
+  document.getElementById('trb-modal').classList.add('open');
+}
+
+// ─── Simpan (insert / update) ke Supabase ───
+async function saveTRBForm() {
+  const pkgId  = document.getElementById('trb-pkg-id').value;
+  const idxRaw = document.getElementById('trb-edit-idx').value;
+  const idx    = idxRaw === '' ? null : parseInt(idxRaw, 10);
+  const pkg    = packages[pkgId];
+  if (!pkg) return;
+
+  const namaKejadian = document.getElementById('trb-nama-kejadian').value.trim();
+  const pernyataan   = document.getElementById('trb-pernyataan').value.trim();
+  if (!namaKejadian || !pernyataan) {
+    alert('Nama Kejadian dan Pernyataan Risiko wajib diisi.');
+    return;
+  }
+  if (!sbUser) {
+    alert('Login dulu untuk menyimpan data Tinjauan Risiko Baru ke Supabase.');
+    return;
+  }
+
+  const skorK   = parseInt(document.getElementById('trb-skor-k').value, 10) || 1;
+  const skorD   = parseInt(document.getElementById('trb-skor-d').value, 10) || 1;
+  const besaran = govMatrixValue(skorK, skorD);
+
+  const item = {
+    tahun:            parseInt(document.getElementById('trb-tahun').value, 10) || new Date().getFullYear(),
+    semester:         document.getElementById('trb-semester').value,
+    namaKejadian:     namaKejadian,
+    pernyataanRisiko: pernyataan,
+    penyebabRisiko:   document.getElementById('trb-penyebab').value.trim(),
+    skorK:            skorK,
+    skorD:            skorD,
+    besaranRisiko:    besaran,
+    levelRisiko:      bobotLabel(besaran),
+    responRisiko:     document.getElementById('trb-respon').value.trim(),
+    statusTinjauan:   document.getElementById('trb-status').value,
+    sumberTemuan:     document.getElementById('trb-sumber').value,
+    catatan:          document.getElementById('trb-catatan').value.trim(),
+  };
+
+  try {
+    if (idx !== null && pkg.trbItems && pkg.trbItems[idx]) {
+      const oldItem = pkg.trbItems[idx];
+      await SB.patch('tinjauan_risiko_baru', `id=eq.${encodeURIComponent(oldItem.id)}`, trbItemToRow(item, pkgId));
+      pkg.trbItems[idx] = { ...oldItem, ...item, id: oldItem.id };
+      sbAuditLog('TRB_UPDATE', oldItem.id, pkgId, null, null);
+      showToast('💾 Tinjauan Risiko Baru diperbarui');
+    } else {
+      const result  = await SB.post('tinjauan_risiko_baru', trbItemToRow(item, pkgId));
+      const newRow  = Array.isArray(result) ? result[0] : result;
+      const newItem = trbRowToItem(newRow);
+      if (!pkg.trbItems) pkg.trbItems = [];
+      pkg.trbItems.unshift(newItem);
+      sbAuditLog('TRB_INSERT', newItem.id, pkgId, null, null);
+      showToast('✅ Tinjauan Risiko Baru tersimpan');
+    }
+    cacheLocalData();
+    closeModal('trb-modal');
+    if (currentPage === pkgId) renderPkgTab(pkgId, currentTab[pkgId]||0);
+  } catch(e) {
+    showToast('❌ Gagal menyimpan Tinjauan Risiko Baru: ' + e.message, 5000);
+    console.error('[SB TRB Save]', e);
+  }
+}
+
+// ─── Hapus entri Tinjauan Risiko Baru ───
+async function deleteTRBEntry(pkgId, idx) {
+  const pkg = packages[pkgId];
+  if (!pkg || !pkg.trbItems || !pkg.trbItems[idx]) return;
+  if (!confirm('Hapus data Tinjauan Risiko Baru ini?')) return;
+  const item = pkg.trbItems[idx];
+
+  try {
+    if (sbUser) {
+      await SB.delete('tinjauan_risiko_baru', `id=eq.${encodeURIComponent(item.id)}`);
+      sbAuditLog('TRB_DELETE', item.id, pkgId, null, null);
+    }
+    pkg.trbItems.splice(idx, 1);
+    cacheLocalData();
+    showToast('🗑 Tinjauan Risiko Baru dihapus');
+    if (currentPage === pkgId) renderPkgTab(pkgId, currentTab[pkgId]||0);
+  } catch(e) {
+    showToast('❌ Gagal menghapus Tinjauan Risiko Baru: ' + e.message, 4000);
+    console.error('[SB TRB Delete]', e);
+  }
+}
+
+// ─── Badge warna status tinjauan ───
+function trbStatusBadge(status) {
+  const map = {
+    'Baru Ditemukan':      { c:'#f0d890', bg:'rgba(232,160,32,0.15)' },
+    'Dalam Kajian Pokja':  { c:'#00cfff', bg:'rgba(0,207,255,0.12)'  },
+    'Disetujui':           { c:'#4ade80', bg:'rgba(74,222,128,0.12)' },
+    'Ditolak':             { c:'#ff8080', bg:'rgba(255,59,59,0.12)'  },
+  };
+  const s = map[status] || map['Baru Ditemukan'];
+  return `<span style="display:inline-block;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:600;color:${s.c};background:${s.bg}">${escTa(status||'-')}</span>`;
+}
+
+// ── TAB 7: TINJAUAN ATAS RISIKO BARU ────────────────────
+function renderTinjauanRisikoBaru(pkg) {
+  const infobox = `<div class="infobox blue">
+    <span class="infobox-icon">🆕</span>
+    <div><strong>Tinjauan Atas Risiko Baru atau Masalah Yang Belum Teridentifikasi</strong> — mengikuti format Lampiran C SE Menteri PUPR 12/2024. Gunakan menu ini untuk mencatat risiko/temuan yang belum ada di register resmi (tab Identifikasi). Besaran &amp; Level Risiko dihitung otomatis memakai tabel yang sama dengan tab Matrik.</div>
+  </div>`;
+
+  if (!pkg.trbItems) {
+    if (!pkg._trbLoading) { pkg._trbLoading = true; loadTRBForPkg(pkg.id); }
+    return infobox + `<div class="card"><div style="padding:32px;text-align:center;color:var(--slate)">⏳ Memuat data Tinjauan Risiko Baru dari Supabase...</div></div>`;
+  }
+
+  const items = pkg.trbItems;
+  const rows = items.map((it,i) => {
+    const color = bobotColor(it.besaranRisiko);
+    return `
+    <tr>
+      <td class="num">${i+1}</td>
+      <td style="font-size:11px;white-space:nowrap">${it.tahun} / Sem ${it.semester}</td>
+      <td style="font-size:11px;min-width:140px">${escTa(it.namaKejadian)}</td>
+      <td style="font-size:11px;min-width:180px;white-space:pre-line">${escTa(it.pernyataanRisiko)}</td>
+      <td style="font-size:11px;min-width:160px;white-space:pre-line">${escTa(it.penyebabRisiko)}</td>
+      <td class="num">${it.skorK}</td>
+      <td class="num">${it.skorD}</td>
+      <td><span class="bobot-cell" style="background:${color.bg};color:${color.c}">${it.besaranRisiko}</span></td>
+      <td style="font-size:11px">${escTa(it.levelRisiko)}</td>
+      <td style="font-size:11px;min-width:140px;white-space:pre-line">${escTa(it.responRisiko)}</td>
+      <td>${trbStatusBadge(it.statusTinjauan)}</td>
+      <td style="font-size:11px">${escTa(it.sumberTemuan)||'–'}</td>
+      <td style="white-space:nowrap">
+        <button class="row-edit-btn" onclick="openAddTRB('${pkg.id}',${i})">✏️</button>
+        <button class="row-del-btn" onclick="deleteTRBEntry('${pkg.id}',${i})">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return infobox + `<div class="card">
+    <div class="card-head">
+      <div class="card-title">🆕 Tinjauan Risiko Baru (${items.length} entri)</div>
+      <button class="topbar-action btn-ghost" onclick="openAddTRB('${pkg.id}')">+ Tambah Tinjauan</button>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>No</th><th>Periode</th><th>Nama Kejadian</th><th>Pernyataan Risiko</th><th>Penyebab Risiko</th>
+        <th>Skor K</th><th>Skor D</th><th>Besaran</th><th>Level Risiko</th><th>Respon Risiko</th>
+        <th>Status</th><th>Sumber Temuan</th><th>Aksi</th>
+      </tr></thead>
+      <tbody>${rows || `<tr><td colspan="13" style="text-align:center;color:var(--slate);padding:20px">Belum ada data tinjauan risiko baru. Klik "+ Tambah Tinjauan" untuk mulai.</td></tr>`}</tbody>
+    </table></div>
+  </div>`;
+}
+
 //  BACKUP PAGE — Diganti dengan Audit Log viewer
 // ═══════════════════════════════════════════════════════
 async function initBackupPage() {
@@ -3331,6 +3713,7 @@ function buildPkgPage(pkgId) {
       <button class="tab-btn" onclick="switchTab('${pkgId}',4)">🔄 Residual</button>
       <button class="tab-btn" onclick="switchTab('${pkgId}',5)">🎯 Matrik</button>
       <button class="tab-btn" onclick="switchTab('${pkgId}',6)">🧭 Pemantauan RTP</button>
+      <button class="tab-btn" onclick="switchTab('${pkgId}',7)">🆕 Tinjauan Risiko Baru</button>
     </div>
     <div id="content-${pkgId}"></div>`;
   wrap.appendChild(div);
@@ -3344,7 +3727,7 @@ function renderPkgTab(pkgId, tabIdx) {
   // Update banner
   const banner = document.querySelector(`#page-${pkgId} .pkg-detail`);
   if(banner) banner.textContent = `Anggaran: ${fmt(pkg.anggaran)} · ${pkg.risks.length} Risiko`;
-  const fns = [renderIdent,renderAnalisa,renderEvaluasi,renderPengendalian,renderResidual,renderMatrik,renderPemantauanRTP];
+  const fns = [renderIdent,renderAnalisa,renderEvaluasi,renderPengendalian,renderResidual,renderMatrik,renderPemantauanRTP,renderTinjauanRisikoBaru];
   el.innerHTML = fns[tabIdx](pkg);
   if (tabIdx === 5) {
     // Beri jeda singkat agar browser selesai melukis DOM sebelum posisi diukur
