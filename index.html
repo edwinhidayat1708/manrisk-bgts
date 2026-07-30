@@ -338,6 +338,7 @@ tbody tr:nth-child(even):hover td:not(.matrix-cell) { background: var(--bg-hover
 .infobox.blue  { background:#001e30; border-color:var(--accent);  color:#b0d8f0; }
 .infobox.gold  { background:#1e1000; border-color:var(--accent2); color:#f0d890; }
 .infobox.green { background:#001e0a; border-color:var(--accent3); color:#90f0b0; }
+.infobox.red   { background:#2a0000; border-color:#ff3b3b;        color:#ffb0b0; }
 .infobox strong { color:#fff; }
 .infobox-icon  { font-size:18px; flex-shrink:0; }
 
@@ -860,6 +861,7 @@ body.light-mode .pkg-icon   { background:rgba(255,195,0,0.15); border-color:#ffc
 body.light-mode .infobox.blue  { background:#e0f2fe; border-color:#0369a1; color:#0c4a6e; }
 body.light-mode .infobox.gold  { background:#fef3c7; border-color:#d97706; color:#78350f; }
 body.light-mode .infobox.green { background:#dcfce7; border-color:#16a34a; color:#14532d; }
+body.light-mode .infobox.red   { background:#fee2e2; border-color:#dc2626; color:#7f1d1d; }
 body.light-mode .infobox strong { color:#000; }
 
 /* FORMULA light */
@@ -1660,6 +1662,13 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
       </div>
 
       <div class="form-group">
+        <label class="form-label">📎 Atau Upload File Bukti Dukung <span style="font-weight:400;color:var(--slate)">(PDF/gambar, maks 10MB)</span></label>
+        <input class="form-input" id="rtp-bukti-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+        <div id="rtp-bukti-current" style="font-size:11px;color:var(--slate);margin-top:4px"></div>
+        <div style="font-size:10px;color:var(--slate);margin-top:4px">Jika file diupload, ini akan menggantikan Link Bukti Dukung di atas untuk entri ini.</div>
+      </div>
+
+      <div class="form-group">
         <label class="form-label">Detail Hambatan / Kendala</label>
         <textarea class="form-textarea" id="rtp-hambatan" placeholder="Uraian kendala yang dihadapi dalam pelaksanaan RTP..."></textarea>
       </div>
@@ -1672,7 +1681,26 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-25 (2026-07-28) — Pemantauan RTP Tahap 2-4 + 8:
+//  VERSI: v5-26 (2026-07-28) — Pemantauan RTP poin 5 & 6:
+//  (5) Upload bukti dukung langsung ke Supabase Storage (bucket
+//      "rtp-bukti-dukung") sebagai alternatif Link Bukti Dukung manual;
+//      nama file, pengunggah (email), dan waktu unggah dicatat per entri
+//      + audit log terpisah (RTP_UPLOAD_BUKTI).
+//  (6) Reminder kepatuhan semester per paket: banner di tab Pemantauan
+//      RTP menampilkan risiko yang sudah punya RTP tapi belum dipantau
+//      untuk semester berjalan, dengan penanda mendesak (⏰ merah) bila
+//      tersisa ≤30 hari sebelum akhir semester. Tombol pintasan langsung
+//      membuka form dengan risiko tersebut terpilih.
+//  CATATAN: reminder ini masih per paket (dihitung dari data paket yang
+//  sedang dibuka) — versi agregat lintas paket/dashboard menyusul di
+//  poin 7 (belum dikerjakan, disimpan sesuai arahan).
+//  PERLU SETUP SUPABASE: (a) buat bucket Storage "rtp-bukti-dukung" +
+//  policy insert/update/delete, (b) migrasi kolom bukti_filename,
+//  bukti_uploaded_by, bukti_uploaded_at di rtp_monitoring — lihat file SQL.
+//  BELUM DIKERJAKAN (disimpan sesuai arahan): dashboard agregat RTP (7),
+//  export format resmi Lampiran B (9).
+//
+//  VERSI SEBELUMNYA: v5-25 (2026-07-28) — Pemantauan RTP Tahap 2-4 + 8:
 //  (1) Auto-pull Pernyataan Risiko/Respon/RTP/PJ/Indikator dari risiko
 //      terdaftar di tab Pengendalian via dropdown "🔗 Tarik dari Risiko"
 //      (field tetap bisa disunting manual untuk penyesuaian periode).
@@ -2441,6 +2469,9 @@ function rtpRowToItem(row) {
     persenRealisasi:   (row.persen_realisasi===null||row.persen_realisasi===undefined) ? 0 : parseFloat(row.persen_realisasi),
     statusRealisasi:   row.status_realisasi || 'Belum Mulai',
     linkBukti:         row.link_bukti || '',
+    buktiFilename:     row.bukti_filename || '',
+    buktiUploadedBy:   row.bukti_uploaded_by || '',
+    buktiUploadedAt:   row.bukti_uploaded_at || '',
     apprRtp:           row.appr_rtp === true,
     catatanApprRtp:    row.catatan_appr_rtp || '',
   };
@@ -2469,6 +2500,9 @@ function rtpItemToRow(item, pkgId) {
     persen_realisasi:  item.persenRealisasi ?? 0,
     status_realisasi:  item.statusRealisasi || 'Belum Mulai',
     link_bukti:        item.linkBukti || '',
+    bukti_filename:    item.buktiFilename || null,
+    bukti_uploaded_by: item.buktiUploadedBy || null,
+    bukti_uploaded_at: item.buktiUploadedAt || null,
   };
 }
 
@@ -2563,7 +2597,55 @@ function populateRTPRiskSelect(pkgId, selectedRiskId) {
   sel.value = selectedRiskId || '';
 }
 
-// ─── Muat data Pemantauan RTP untuk satu paket (lazy-load, sekali per paket) ───
+// ─── Upload file bukti dukung ke Supabase Storage ───
+const RTP_BUCKET = 'rtp-bukti-dukung';
+
+async function uploadRTPBukti(pkgId, file) {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${pkgId}/${Date.now()}_${safeName}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${RTP_BUCKET}/${encodeURIComponent(path)}`, {
+    method: 'POST',
+    headers: {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + sbGetToken(),
+      'Content-Type':  file.type || 'application/octet-stream',
+      'x-upsert':      'true',
+    },
+    body: file,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${RTP_BUCKET}/${path}`;
+  return { url: publicUrl, filename: file.name };
+}
+
+// ─── Reminder kepatuhan semester (per paket) ───
+// Menandai risiko yang sudah punya RTP (r.rtp terisi) tapi belum ada
+// entri Pemantauan RTP untuk periode (tahun/semester) berjalan.
+function getCurrentPeriod() {
+  const now = new Date();
+  const tahun = now.getFullYear();
+  const semester = (now.getMonth() < 6) ? '1' : '2'; // Jan-Jun = Sem 1, Jul-Des = Sem 2
+  return { tahun, semester, now };
+}
+
+function daysUntilSemesterEnd() {
+  const { tahun, semester, now } = getCurrentPeriod();
+  const end = (semester === '1') ? new Date(tahun, 5, 30) : new Date(tahun, 11, 31);
+  return Math.ceil((end - now) / 86400000);
+}
+
+function computeRTPComplianceAlerts(pkg) {
+  const { tahun, semester } = getCurrentPeriod();
+  const monitoredRiskIds = new Set(
+    (pkg.rtpItems || [])
+      .filter(it => String(it.tahun) === String(tahun) && it.semester === semester && it.riskId)
+      .map(it => it.riskId)
+  );
+  const pending = (pkg.risks || []).filter(r => (r.rtp||'').trim() !== '' && !monitoredRiskIds.has(r.id));
+  return { tahun, semester, pending };
+}
+
+
 async function loadRTPForPkg(pkgId) {
   const pkg = packages[pkgId];
   if (!pkg) return;
@@ -2588,7 +2670,7 @@ async function loadRTPForPkg(pkgId) {
 }
 
 // ─── Buka modal tambah / edit ───
-function openAddRTP(pkgId, idx) {
+function openAddRTP(pkgId, idx, presetRiskId) {
   const pkg = packages[pkgId];
   const item = (idx !== undefined && idx !== null && pkg?.rtpItems) ? pkg.rtpItems[idx] : null;
 
@@ -2596,7 +2678,7 @@ function openAddRTP(pkgId, idx) {
   document.getElementById('rtp-edit-idx').value  = (idx===undefined||idx===null) ? '' : idx;
   document.getElementById('rtp-modal-title').textContent = item ? '✏️ Ubah Pemantauan RTP' : '+ Tambah Pemantauan RTP';
 
-  populateRTPRiskSelect(pkgId, item?.riskId || '');
+  populateRTPRiskSelect(pkgId, item?.riskId || presetRiskId || '');
 
   document.getElementById('rtp-tahun').value       = item?.tahun     || new Date().getFullYear();
   document.getElementById('rtp-semester').value    = item?.semester  || '1';
@@ -2614,8 +2696,16 @@ function openAddRTP(pkgId, idx) {
   document.getElementById('rtp-hambatan').value    = item?.hambatan        || '';
   document.getElementById('rtp-link').value        = item?.linkBukti       || '';
 
+  const fileInput = document.getElementById('rtp-bukti-file');
+  fileInput.value = '';
+  const buktiInfo = document.getElementById('rtp-bukti-current');
+  buktiInfo.textContent = item?.buktiFilename
+    ? `📎 File tersimpan: ${item.buktiFilename} (diupload oleh ${item.buktiUploadedBy||'-'})`
+    : '';
+
   document.getElementById('rtp-risk-history').style.display = 'none';
-  if (item?.riskId) onRTPRiskSelect();
+  const riskToSelect = item?.riskId || presetRiskId || '';
+  if (riskToSelect) onRTPRiskSelect();
   if (!item) applyRTPDateDefaults();
 
   document.getElementById('rtp-modal').classList.add('open');
@@ -2662,13 +2752,45 @@ async function saveRTPForm() {
     hambatanKategori:  document.getElementById('rtp-hambatan-kategori').value,
     hambatan:          document.getElementById('rtp-hambatan').value.trim(),
     linkBukti:         document.getElementById('rtp-link').value.trim(),
+    buktiFilename:     '', buktiUploadedBy: '', buktiUploadedAt: '',
   };
 
+  // Jika idx mode edit, pertahankan metadata file lama secara default
+  if (idx !== null && pkg.rtpItems && pkg.rtpItems[idx]) {
+    item.buktiFilename   = pkg.rtpItems[idx].buktiFilename   || '';
+    item.buktiUploadedBy = pkg.rtpItems[idx].buktiUploadedBy || '';
+    item.buktiUploadedAt = pkg.rtpItems[idx].buktiUploadedAt || '';
+  }
+
+  // ── Upload file bukti dukung (jika ada file dipilih) ──
+  const fileInput = document.getElementById('rtp-bukti-file');
+  const file = fileInput.files[0];
+  if (file) {
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Ukuran file maksimal 10MB.');
+      return;
+    }
+    try {
+      showToast('⏳ Mengupload file bukti dukung...', 2000);
+      const uploaded = await uploadRTPBukti(pkgId, file);
+      item.linkBukti       = uploaded.url;
+      item.buktiFilename   = uploaded.filename;
+      item.buktiUploadedBy = sbUser.email;
+      item.buktiUploadedAt = new Date().toISOString();
+    } catch(e) {
+      showToast('❌ Gagal upload file bukti dukung: ' + e.message, 5000);
+      console.error('[SB Storage Upload]', e);
+      return;
+    }
+  }
+
   try {
+    let savedId;
     if (idx !== null && pkg.rtpItems && pkg.rtpItems[idx]) {
       const oldItem = pkg.rtpItems[idx];
       await SB.patch('rtp_monitoring', `id=eq.${encodeURIComponent(oldItem.id)}`, rtpItemToRow(item, pkgId));
       pkg.rtpItems[idx] = { ...oldItem, ...item, id: oldItem.id };
+      savedId = oldItem.id;
       sbAuditLog('RTP_UPDATE', oldItem.id, pkgId, null, null);
       showToast('💾 Pemantauan RTP diperbarui');
     } else {
@@ -2677,8 +2799,12 @@ async function saveRTPForm() {
       const newItem = rtpRowToItem(newRow);
       if (!pkg.rtpItems) pkg.rtpItems = [];
       pkg.rtpItems.unshift(newItem);
+      savedId = newItem.id;
       sbAuditLog('RTP_INSERT', newItem.id, pkgId, null, null);
       showToast('✅ Pemantauan RTP tersimpan');
+    }
+    if (file) {
+      sbAuditLog('RTP_UPLOAD_BUKTI', savedId, pkgId, null, { filename: item.buktiFilename, uploaded_by: item.buktiUploadedBy, uploaded_at: item.buktiUploadedAt });
     }
     cacheLocalData();
     closeModal('rtp-modal');
@@ -2786,6 +2912,23 @@ function renderPemantauanRTP(pkg) {
     return infobox + `<div class="card"><div style="padding:32px;text-align:center;color:var(--slate)">⏳ Memuat data Pemantauan RTP dari Supabase...</div></div>`;
   }
 
+  // ── Reminder kepatuhan semester ──
+  const { tahun, semester, pending } = computeRTPComplianceAlerts(pkg);
+  const daysLeft = daysUntilSemesterEnd();
+  let reminderBox = '';
+  if (pending.length > 0) {
+    const urgent = daysLeft <= 30;
+    reminderBox = `<div class="infobox ${urgent ? 'red' : 'gold'}">
+      <span class="infobox-icon">${urgent ? '⏰' : '📋'}</span>
+      <div>
+        <strong>${pending.length} risiko di paket ini belum ada Pemantauan RTP untuk Semester ${semester} Tahun ${tahun}</strong>${urgent ? ` — tersisa ${daysLeft} hari sebelum akhir semester!` : ''}
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+          ${pending.map(r => `<button class="topbar-action btn-ghost" style="font-size:11px;padding:4px 10px" onclick="openAddRTP('${pkg.id}', undefined, '${r.id}')">+ ${escTa(r.id)}</button>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
   const items = pkg.rtpItems;
   const rows = items.map((it,i) => `
     <tr>
@@ -2804,7 +2947,7 @@ function renderPemantauanRTP(pkg) {
         ${it.hambatanKategori?`<span class="badge" style="margin-bottom:4px;display:inline-block">${escTa(it.hambatanKategori)}</span><br>`:''}
         <span style="white-space:pre-line">${escTa(it.hambatan)}</span>
       </td>
-      <td style="font-size:11px">${it.linkBukti ? `<a href="${escTa(it.linkBukti)}" target="_blank" rel="noopener">🔗 Buka</a>` : '–'}</td>
+      <td style="font-size:11px">${it.linkBukti ? `<a href="${escTa(it.linkBukti)}" target="_blank" rel="noopener">🔗 Buka</a>` : '–'}${it.buktiFilename ? `<div style="color:var(--slate);margin-top:2px">📎 ${escTa(it.buktiFilename)}<br>oleh ${escTa(it.buktiUploadedBy)}</div>` : ''}</td>
       <td style="text-align:center;min-width:110px">
         <button class="appr-toggle ${it.apprRtp?'appr-on':'appr-off'}" onclick="toggleApprRTP('${pkg.id}',${i},this)">
           ${it.apprRtp?'✓ Terverifikasi':'— Belum'}
@@ -2818,7 +2961,7 @@ function renderPemantauanRTP(pkg) {
       </td>
     </tr>`).join('');
 
-  return infobox + `<div class="card">
+  return infobox + reminderBox + `<div class="card">
     <div class="card-head">
       <div class="card-title">🧭 Pemantauan RTP (${items.length} entri)</div>
       <button class="topbar-action btn-ghost" onclick="openAddRTP('${pkg.id}')">+ Tambah Pemantauan</button>
