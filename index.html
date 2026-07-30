@@ -373,6 +373,24 @@ tbody tr:nth-child(even):hover td:not(.matrix-cell) { background: var(--bg-hover
   font-family:'DM Mono',monospace; font-size:12px; font-weight:800;
 }
 .risk-chip { display:inline-block; font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; margin:1px; background:rgba(0,0,0,0.5); color:#fff; font-family:'DM Mono',monospace; }
+
+/* ── Efek cahaya bergerak (shimmer) di badge Inherent Risk — menandai   */
+/* ── risiko yang akan "berpindah" ke posisi residual saat tab Matrik dibuka ── */
+.risk-chip-shimmer { position:relative; overflow:hidden; }
+.risk-chip-shimmer::after {
+  content:'';
+  position:absolute; top:0; left:-150%;
+  width:60%; height:100%;
+  background:linear-gradient(120deg, transparent, rgba(255,255,255,0.65), transparent);
+  animation:mtxShimmer 1.8s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes mtxShimmer {
+  0%   { left:-150%; }
+  100% { left:150%; }
+}
+/* ── Badge "terbang" sementara dari sel Inherent menuju sel Residual ── */
+.mtx-flying-chip { pointer-events:none; box-shadow:0 0 8px 2px rgba(255,255,255,0.35); }
 /* Matrix: Sangat Rendah = hijau muda */
 .mc-1,.mc-2,.mc-3,.mc-4,.mc-5 {
   background:#1a7a3c; color:#b8ffd0;
@@ -771,6 +789,11 @@ body.light-mode .theme-toggle::after { left:21px; background:#f0a500; box-shadow
   .legend-dot[style*="b58a00"]     { background:#b58a00!important; }
   .legend-dot[style*="c05a00"]     { background:#c05a00!important; }
   .legend-dot[style*="9a0000"]     { background:#9a0000!important; }
+
+  /* ── Animasi perpindahan Matrik: tidak boleh muncul saat print ── */
+  .mtx-flying-chip { display:none!important; }
+  .risk-chip-shimmer::after { content:none!important; animation:none!important; }
+  .risk-chip { visibility:visible!important; }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1681,7 +1704,18 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-26 (2026-07-28) — Pemantauan RTP poin 5 & 6:
+//  VERSI: v5-27 (2026-07-28) — Animasi perpindahan badge risiko di tab
+//  Matrik: setiap kali tab dibuka, badge tiap risiko "terbang" dari posisi
+//  Inherent Risk ke posisi Residual Risk (untuk SEMUA risiko, termasuk yang
+//  posisinya tidak berubah). Badge di sisi Inherent diberi efek cahaya
+//  bergerak (shimmer) sebagai penanda "akan berpindah". Efek ini murni
+//  tampilan layar (CSS + JS pengukuran posisi elemen) — tidak mengubah data,
+//  dan tidak memengaruhi hasil print/export Word (dibangun terpisah lewat
+//  doPrint()/exportWord(), selalu menampilkan nilai residual final).
+//  Ditambah aturan @media print defensif untuk berjaga-jaga bila halaman
+//  di-print langsung (Ctrl+P) selagi animasi berjalan.
+//
+//  VERSI SEBELUMNYA: v5-26 (2026-07-28) — Pemantauan RTP poin 5 & 6:
 //  (5) Upload bukti dukung langsung ke Supabase Storage (bucket
 //      "rtp-bukti-dukung") sebagai alternatif Link Bukti Dukung manual;
 //      nama file, pengunggah (email), dan waktu unggah dicatat per entri
@@ -3312,6 +3346,10 @@ function renderPkgTab(pkgId, tabIdx) {
   if(banner) banner.textContent = `Anggaran: ${fmt(pkg.anggaran)} · ${pkg.risks.length} Risiko`;
   const fns = [renderIdent,renderAnalisa,renderEvaluasi,renderPengendalian,renderResidual,renderMatrik,renderPemantauanRTP];
   el.innerHTML = fns[tabIdx](pkg);
+  if (tabIdx === 5) {
+    // Beri jeda singkat agar browser selesai melukis DOM sebelum posisi diukur
+    setTimeout(() => animateMatrikTransition(pkg), 60);
+  }
 }
 
 // ── TAB 0: IDENTIFIKASI ──────────────────────
@@ -3629,13 +3667,13 @@ function renderMatrik(pkg) {
     return grid;
   }
 
-  function buildTable(grid, title) {
+  function buildTable(grid, title, keyPrefix) {
     const th = `<tr><th class="row-header" style="min-width:140px">K ↓ / D →</th>${DAM_LABELS.map(d=>`<th class="matrix-cell" style="font-size:9px;padding:6px 4px">${d}</th>`).join('')}</tr>`;
     const tbody = PROB_LABELS.map((pl,ri)=>{
       const cells = [0,1,2,3,4].map(ci=>{
         const bobot = govMatrixValue(5-ri, ci+1);
         const codes = grid[ri][ci];
-        const chips = codes.map(c=>`<div class="risk-chip">${c}</div>`).join('');
+        const chips = codes.map(c=>`<div class="risk-chip${keyPrefix==='inh'?' risk-chip-shimmer':''}" id="mtx-${keyPrefix}-${c}">${c}</div>`).join('');
         const tolBorder = govToleranceBorder(ri, ci);
         return `<td class="matrix-cell ${mcClass(bobot)}"${tolBorder?` style="${tolBorder}"`:''}>${chips||bobot}</td>`;
       }).join('');
@@ -3664,12 +3702,64 @@ function renderMatrik(pkg) {
         <div class="legend-item"><div class="legend-dot" style="background:#9a0000"></div><span class="legend-label legend-st">Sangat Tinggi (20–25)</span></div>
         <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div><span class="legend-label" style="color:#c4b5fd">Garis Toleransi</span></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
-        ${buildTable(buildGrid(false),'⬛ Sebelum Pengendalian (Inherent Risk)')}
-        ${buildTable(buildGrid(true), '✅ Setelah Pengendalian (Residual Risk)')}
+      <div id="matrik-flight-zone-${pkg.id}" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        ${buildTable(buildGrid(false),'⬛ Sebelum Pengendalian (Inherent Risk)','inh')}
+        ${buildTable(buildGrid(true), '✅ Setelah Pengendalian (Residual Risk)','res')}
       </div>
     </div>
   </div>`;
+}
+
+// ─── Animasi perpindahan badge risiko: Inherent → Residual ───
+// Dipicu otomatis tiap kali tab Matrik dibuka. Berlaku untuk SEMUA risiko
+// (termasuk yang posisinya tidak berubah — dalam hal ini badge "terbang"
+// dari & ke titik yang sama, jadi tidak terlihat bergerak, itu wajar).
+// Efek ini murni tampilan layar: tidak memengaruhi data maupun hasil print/
+// export (yang dibangun terpisah lewat doPrint()/exportWord()).
+function animateMatrikTransition(pkg) {
+  const container = document.getElementById('content-' + pkg.id);
+  if (!container) return;
+
+  // Bersihkan sisa ghost dari render sebelumnya (jaga-jaga)
+  document.querySelectorAll('.mtx-flying-chip').forEach(el => el.remove());
+
+  pkg.risks.forEach(r => {
+    let from, to;
+    try {
+      from = container.querySelector(`#mtx-inh-${CSS.escape(r.id)}`);
+      to   = container.querySelector(`#mtx-res-${CSS.escape(r.id)}`);
+    } catch(e) { return; }
+    if (!from || !to) return;
+
+    const fromRect = from.getBoundingClientRect();
+    const toRect   = to.getBoundingClientRect();
+
+    const ghost = document.createElement('div');
+    ghost.className   = 'risk-chip risk-chip-shimmer mtx-flying-chip';
+    ghost.textContent = r.id;
+    ghost.style.position   = 'fixed';
+    ghost.style.left       = fromRect.left + 'px';
+    ghost.style.top        = fromRect.top + 'px';
+    ghost.style.zIndex     = 9999;
+    ghost.style.transition = 'left 1.1s ease-in-out, top 1.1s ease-in-out, opacity 0.3s ease 0.9s';
+    document.body.appendChild(ghost);
+
+    // Sembunyikan badge tujuan sementara supaya tidak terlihat dobel selagi ghost "terbang"
+    to.style.visibility = 'hidden';
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ghost.style.left = toRect.left + 'px';
+        ghost.style.top  = toRect.top + 'px';
+      });
+    });
+
+    setTimeout(() => {
+      to.style.visibility = 'visible';
+      ghost.style.opacity = '0';
+      setTimeout(() => ghost.remove(), 350);
+    }, 1150);
+  });
 }
 
 //  DASHBOARD
