@@ -63,6 +63,144 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius:3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-sub); }
 
+/* ═══════════════════════════════════════════════════
+   LANDING SCREEN — splash sebelum masuk dashboard
+   ═══════════════════════════════════════════════════ */
+#landing-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  background-image:
+    linear-gradient(180deg, rgba(4,9,18,0.55) 0%, rgba(4,9,18,0.75) 55%, rgba(4,9,18,0.96) 100%),
+    url('assets/gedung-bgts.jpg');
+  background-size: cover;
+  background-position: center 60%;
+  overflow: hidden;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+#landing-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Daun goyang — overlay ringan, tidak butuh aset gambar terpisah */
+.landing-leaf {
+  position: absolute;
+  font-size: 22px;
+  opacity: 0.55;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+  transform-origin: top center;
+  animation: leafSway 4.5s ease-in-out infinite;
+  user-select: none;
+  pointer-events: none;
+}
+@keyframes leafSway {
+  0%   { transform: rotate(-8deg) translateY(0px); }
+  50%  { transform: rotate(9deg) translateY(6px); }
+  100% { transform: rotate(-8deg) translateY(0px); }
+}
+
+/* Awan melayang — blob blur CSS, tanpa aset gambar */
+.landing-cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+  filter: blur(8px);
+  pointer-events: none;
+  animation: cloudDrift linear infinite;
+}
+@keyframes cloudDrift {
+  from { transform: translateX(-15vw); }
+  to   { transform: translateX(115vw); }
+}
+
+.landing-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 22px;
+  padding: 24px;
+  animation: landingFadeUp 0.9s ease both;
+}
+@keyframes landingFadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.landing-badge {
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  color: var(--text-sub);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.landing-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(28px, 5vw, 48px);
+  letter-spacing: 1px;
+  line-height: 1.15;
+  background: linear-gradient(100deg,
+    #ffcc00 0%, #ffe9a8 15%, #00d8ff 35%, #ddeeff 50%,
+    #00d8ff 65%, #ffe9a8 85%, #ffcc00 100%);
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: titleShimmer 4s linear infinite;
+  filter: drop-shadow(0 2px 18px rgba(0,216,255,0.25));
+}
+@keyframes titleShimmer {
+  0%   { background-position: 0% center; }
+  100% { background-position: -250% center; }
+}
+
+.landing-sub {
+  font-size: 13px;
+  color: var(--text-sub);
+  max-width: 420px;
+  line-height: 1.6;
+}
+
+.landing-login-box {
+  margin-top: 6px;
+  background: rgba(8,15,30,0.55);
+  border: 1px solid var(--border-bright);
+  backdrop-filter: blur(6px);
+  border-radius: var(--radius);
+  padding: 22px 30px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  box-shadow: 0 0 0 1px rgba(0,216,255,0.06), 0 16px 40px rgba(0,0,0,0.45);
+}
+
+.landing-btn-masuk {
+  padding: 13px 34px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 0 22px rgba(0,216,255,0.35);
+}
+.landing-btn-masuk:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(0,216,255,0.5); }
+
+.landing-skip {
+  font-size: 12px;
+  color: var(--text-sub);
+  cursor: pointer;
+  text-decoration: underline;
+  background: none; border: none;
+  font-family: 'DM Sans', sans-serif;
+}
+.landing-skip:hover { color: var(--text-main); }
+
 /* ─── LAYOUT ─────────────────────────────────────── */
 #app { display:flex; height:100vh; overflow:hidden; }
 
@@ -1012,6 +1150,35 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 
 </head>
 <body>
+
+<!-- ══════ LANDING SCREEN ══════ -->
+<div id="landing-screen">
+  <!-- Awan melayang — area langit, di belakang daun & konten -->
+  <div class="landing-cloud" style="top:6%;  width:160px; height:34px; animation-duration:48s; animation-delay:0s;"></div>
+  <div class="landing-cloud" style="top:13%; width:110px; height:24px; animation-duration:62s; animation-delay:-15s;"></div>
+  <div class="landing-cloud" style="top:3%;  width:90px;  height:20px; animation-duration:55s; animation-delay:-32s;"></div>
+  <div class="landing-cloud" style="top:18%; width:140px; height:28px; animation-duration:70s; animation-delay:-8s;"></div>
+
+  <!-- Daun goyang — posisi menyebar di area pohon kanan foto -->
+  <span class="landing-leaf" style="top:8%;  left:78%; animation-delay:0s;   font-size:26px;">🍃</span>
+  <span class="landing-leaf" style="top:14%; left:85%; animation-delay:0.8s; font-size:18px;">🍃</span>
+  <span class="landing-leaf" style="top:20%; left:72%; animation-delay:1.6s; font-size:22px;">🍃</span>
+  <span class="landing-leaf" style="top:10%; left:91%; animation-delay:2.2s; font-size:20px;">🍃</span>
+  <span class="landing-leaf" style="top:26%; left:80%; animation-delay:1.1s; font-size:16px;">🍃</span>
+  <span class="landing-leaf" style="top:6%;  left:65%; animation-delay:2.9s; font-size:18px;">🍃</span>
+  <span class="landing-leaf" style="top:32%; left:87%; animation-delay:0.4s; font-size:15px;">🍃</span>
+
+  <div class="landing-content">
+    <div class="landing-badge">Kementerian PUPR &nbsp;•&nbsp; Balai Geoteknik, Terowongan, dan Struktur</div>
+    <div class="landing-title">MANAJEMEN RISIKO<br>BGTS</div>
+    <div class="landing-sub">Sistem manajemen risiko internal BGTS — selaras ISO 31000 &amp; SE Menteri PUPR 12/2024, terintegrasi dengan PU-RISK.</div>
+    <div class="landing-login-box">
+      <button class="landing-btn-masuk" onclick="gsLogin()">🔑 Masuk ke Sistem</button>
+      <button class="landing-skip" onclick="hideLanding()">Lanjut tanpa login →</button>
+    </div>
+  </div>
+</div>
+
 <div id="app">
 
 <!-- ══════ SIDEBAR ══════ -->
@@ -2166,6 +2333,16 @@ function rowToRisk(row) {
 // ═══════════════════════════════════════════════════════
 let sbUser = null;
 
+// ─── Landing screen ────────────────────────────────
+function hideLanding() {
+  const el = document.getElementById('landing-screen');
+  if (el) el.classList.add('hidden');
+}
+function showLanding() {
+  const el = document.getElementById('landing-screen');
+  if (el) el.classList.remove('hidden');
+}
+
 function gsLogin() {
   // Reset form
   ['gs-input-email','gs-input-password','gs-signup-name','gs-signup-unit','gs-signup-email','gs-signup-password','gs-signup-password2'].forEach(id => {
@@ -2227,6 +2404,7 @@ async function gsDoLogin() {
 
     closeModal('gs-login-modal');
     gsUpdateUI(true, true);
+    hideLanding();
     showToast('✅ Login sebagai ' + sbUser.displayName + ' — memuat data...');
     await sbLoadAll();
   } catch(e) {
@@ -2280,6 +2458,7 @@ async function gsDoSignup() {
 
     closeModal('gs-login-modal');
     gsUpdateUI(true, true);
+    hideLanding();
     showToast('🎉 Akun dibuat! Login sebagai ' + sbUser.displayName + ' — memuat data...');
     await sbLoadAll();
   } catch(e) {
@@ -2323,6 +2502,9 @@ async function gsLogout() {
   // Kembali ke halaman dashboard (kosong)
   showPage('dashboard');
 
+  // Tampilkan lagi landing screen setelah logout
+  showLanding();
+
   showToast('👋 Logout berhasil — data telah dibersihkan');
 }
 
@@ -2339,6 +2521,7 @@ function gsRestoreSession() {
           _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
           localStorage.setItem('sbSession', JSON.stringify(_sbSession));
           gsUpdateUI(true, true);
+          hideLanding();
           await sbLoadAll();
         }).catch(() => {
           _sbSession = null; sbUser = null;
@@ -2347,6 +2530,7 @@ function gsRestoreSession() {
         });
       } else {
         gsUpdateUI(true, true);
+        hideLanding();
         // Delay sedikit agar DOM siap, lalu load otomatis
         setTimeout(() => sbLoadAll(), 200);
       }
