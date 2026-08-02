@@ -67,7 +67,7 @@ body {
    LANDING SCREEN — splash sebelum masuk dashboard
    ═══════════════════════════════════════════════════ */
 #landing-screen {
-  position: fixed; inset: 0; z-index: 9999;
+  position: fixed; inset: 0; z-index: 60;
   display: flex; align-items: center; justify-content: center;
   background-image:
     linear-gradient(180deg, rgba(4,9,18,0.55) 0%, rgba(4,9,18,0.75) 55%, rgba(4,9,18,0.96) 100%),
@@ -83,9 +83,72 @@ body {
   pointer-events: none;
 }
 
+/* Vignette — fokus mata ke tengah, kesan sinematik */
+#landing-screen::before {
+  content: '';
+  position: absolute; inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%,
+    rgba(0,0,0,0) 35%,
+    rgba(0,0,0,0.25) 75%,
+    rgba(0,0,0,0.55) 100%);
+}
+
+/* Sinar matahari — beam tipis dari sudut atas */
+.landing-lightray {
+  position: absolute;
+  z-index: 1;
+  top: -10%;
+  width: 26vw;
+  height: 130%;
+  background: linear-gradient(180deg, rgba(255,246,214,0.22) 0%, rgba(255,246,214,0) 70%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: rayPulse 7s ease-in-out infinite;
+}
+@keyframes rayPulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.9; }
+}
+
+/* Kabut tipis di dasar halaman — kesan kedalaman */
+.landing-fog {
+  position: absolute;
+  z-index: 1;
+  bottom: 0; left: -20%;
+  width: 140%; height: 22%;
+  background: linear-gradient(180deg, rgba(220,230,240,0) 0%, rgba(210,220,235,0.30) 100%);
+  filter: blur(10px);
+  pointer-events: none;
+  animation: fogDrift 26s ease-in-out infinite;
+}
+@keyframes fogDrift {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(4%); }
+}
+
+/* Partikel debu/cahaya — titik kecil melayang naik pelan */
+.landing-dust {
+  position: absolute;
+  z-index: 1;
+  border-radius: 50%;
+  background: rgba(255,250,225,0.7);
+  filter: blur(0.5px);
+  pointer-events: none;
+  animation: dustFloat linear infinite;
+}
+@keyframes dustFloat {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 0.8; }
+  90%  { opacity: 0.4; }
+  100% { transform: translateY(-38vh) translateX(3vw); opacity: 0; }
+}
+
 /* Daun goyang — overlay ringan, tidak butuh aset gambar terpisah */
 .landing-leaf {
   position: absolute;
+  z-index: 1;
   font-size: 22px;
   opacity: 0.55;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
@@ -103,6 +166,7 @@ body {
 /* Awan melayang — blob blur CSS, tanpa aset gambar */
 .landing-cloud {
   position: absolute;
+  z-index: 1;
   border-radius: 50%;
   background: rgba(255,255,255,0.5);
   filter: blur(8px);
@@ -190,16 +254,6 @@ body {
   box-shadow: 0 0 22px rgba(0,216,255,0.35);
 }
 .landing-btn-masuk:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(0,216,255,0.5); }
-
-.landing-skip {
-  font-size: 12px;
-  color: var(--text-sub);
-  cursor: pointer;
-  text-decoration: underline;
-  background: none; border: none;
-  font-family: 'DM Sans', sans-serif;
-}
-.landing-skip:hover { color: var(--text-main); }
 
 /* ─── LAYOUT ─────────────────────────────────────── */
 #app { display:flex; height:100vh; overflow:hidden; }
@@ -1153,6 +1207,22 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 
 <!-- ══════ LANDING SCREEN ══════ -->
 <div id="landing-screen">
+  <!-- Sinar matahari -->
+  <div class="landing-lightray" style="left:8%;"></div>
+  <div class="landing-lightray" style="left:60%; width:18vw; animation-delay:-3s; opacity:0.7;"></div>
+
+  <!-- Kabut tipis di dasar -->
+  <div class="landing-fog"></div>
+
+  <!-- Partikel debu/cahaya melayang -->
+  <div class="landing-dust" style="left:15%; bottom:10%;  width:3px; height:3px; animation-duration:9s;  animation-delay:0s;"></div>
+  <div class="landing-dust" style="left:32%; bottom:5%;   width:2px; height:2px; animation-duration:12s; animation-delay:-4s;"></div>
+  <div class="landing-dust" style="left:48%; bottom:14%;  width:4px; height:4px; animation-duration:10s; animation-delay:-7s;"></div>
+  <div class="landing-dust" style="left:63%; bottom:8%;   width:2px; height:2px; animation-duration:14s; animation-delay:-2s;"></div>
+  <div class="landing-dust" style="left:76%; bottom:12%;  width:3px; height:3px; animation-duration:11s; animation-delay:-9s;"></div>
+  <div class="landing-dust" style="left:22%; bottom:18%;  width:2px; height:2px; animation-duration:13s; animation-delay:-5.5s;"></div>
+  <div class="landing-dust" style="left:88%; bottom:6%;   width:3px; height:3px; animation-duration:10.5s; animation-delay:-1s;"></div>
+
   <!-- Awan melayang — area langit, di belakang daun & konten -->
   <div class="landing-cloud" style="top:6%;  width:160px; height:34px; animation-duration:48s; animation-delay:0s;"></div>
   <div class="landing-cloud" style="top:13%; width:110px; height:24px; animation-duration:62s; animation-delay:-15s;"></div>
@@ -1174,7 +1244,6 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     <div class="landing-sub">Sistem manajemen risiko internal BGTS — selaras ISO 31000 &amp; SE Menteri PUPR 12/2024, terintegrasi dengan PU-RISK.</div>
     <div class="landing-login-box">
       <button class="landing-btn-masuk" onclick="gsLogin()">🔑 Masuk ke Sistem</button>
-      <button class="landing-skip" onclick="hideLanding()">Lanjut tanpa login →</button>
     </div>
   </div>
 </div>
