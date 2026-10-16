@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V5-30 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-31 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
@@ -1339,7 +1339,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     </div>
     <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:2px">
       <div style="font-size:9px;color:var(--slate);letter-spacing:1px;text-transform:uppercase">Versi</div>
-      <div style="font-weight:700;color:var(--gold-lt);font-size:12px">ManRisk BGTS v5-30</div>
+      <div style="font-weight:700;color:var(--gold-lt);font-size:12px">ManRisk BGTS v5-31</div>
       <div style="font-size:10px;color:var(--slate);margin-top:2px" id="sidebar-date"></div>
     </div>
   </div>
@@ -2075,7 +2075,14 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-30 (2026-10-13) — Keandalan simpan data. Penyebab: isian rekan tampil di layar
+//  VERSI: v5-31 (2026-10-16) — (1) Pagu BGTS kini disimpan di Supabase (tabel app_settings) dan
+//  dimuat saat login, sehingga seluruh pengguna memakai angka yang sama (sebelumnya hanya di
+//  localStorage browser masing-masing). (2) Mengubah Kode Risiko di form Edit kini mengubah
+//  kunci baris yang SAMA di server (tidak lagi membuat baris baru dan meninggalkan baris
+//  lama), menjaga tautan Pemantauan RTP, serta menolak kode yang sudah dipakai risiko lain
+//  di paket yang sama. Perlu SQL: membuat tabel app_settings.
+//
+//  VERSI SEBELUMNYA: v5-30 (2026-10-13) — Keandalan simpan data. Penyebab: isian rekan tampil di layar
 //  tetapi tidak sampai ke Supabase (simpan gagal hanya memunculkan toast 5 detik; autosave
 //  gsSaveAll() menimpa data antar pengguna). Perubahan: (1) banner merah PERMANEN + tombol
 //  "Coba simpan lagi" bila simpan risiko gagal; (2) token login diperbarui otomatis sebelum
@@ -2733,6 +2740,8 @@ async function sbLoadAll() {
       packages[p.id] = { id: p.id, name: p.name, icon: p.icon||'📁', anggaran: parseFloat(p.anggaran)||0, kategori: p.kategori||'utama', risks: [] };
     });
 
+    await sbLoadPagu();
+
     riskRows.forEach(row => {
       if (!packages[row.pkg_id]) {
         packages[row.pkg_id] = { id: row.pkg_id, name: row.pkg_name||row.pkg_id, icon:'📁', anggaran:0, kategori:'utama', risks:[] };
@@ -2754,6 +2763,52 @@ async function sbLoadAll() {
   } finally {
     if (btn) { btn.textContent = '⬇️ Muat'; btn.disabled = false; }
   }
+}
+
+// ─── v5-31: Pagu BGTS bersama (tabel app_settings) + ubah Kode Risiko di baris yang SAMA ───
+function sbApplyPagu(val) {
+  PAGU = val;
+  localStorage.setItem('manrisk-pagu', val);
+  const el = document.getElementById('pagu-display');
+  if (el) el.textContent = 'Rp ' + val.toLocaleString('id-ID');
+}
+
+async function sbLoadPagu() {
+  try {
+    const rows = await SB.get('app_settings', '?key=eq.pagu&select=value');
+    const v = rows && rows[0] ? parseFloat(rows[0].value) : NaN;
+    if (v > 0) sbApplyPagu(v);
+  } catch(e) {
+    // Tidak boleh menggagalkan pemuatan data bila tabel belum dibuat
+    console.warn('[Pagu] gagal memuat dari server (tabel app_settings sudah dibuat?):', e.message);
+  }
+}
+
+async function sbSaveEditedRisk(pkgId, r, oldId) {
+  if (!sbUser || oldId === r.id) return gsSaveOneRisk(pkgId, r, true);
+  const enc = encodeURIComponent;
+  let renamed = false;
+  try {
+    // ubah kunci baris yang SAMA di server (bukan membuat baris baru)
+    await SB.patch('risks', `id=eq.${enc(oldId)}&pkg_id=eq.${enc(pkgId)}`, { id: r.id });
+    renamed = true;
+  } catch(e) {
+    const newId = r.id;
+    r.id = oldId;                       // layar kembali sama dengan server
+    buildPkgNav();
+    if (packages[pkgId]) renderPkgTab(pkgId, currentTab[pkgId] || 0);
+    showToast('❌ Kode risiko GAGAL diubah ke ' + newId + ': ' + sbExplainError(e) + ' (kode tetap ' + oldId + ')', 8000);
+    console.error('[SB RenameRisk]', e);
+  }
+  if (renamed) {
+    // pertahankan tautan Pemantauan RTP ke risiko ini
+    (packages[pkgId]?.rtpItems || []).forEach(it => { if (it.riskId === oldId) it.riskId = r.id; });
+    try {
+      await SB.patch('rtp_monitoring', `risk_id=eq.${enc(oldId)}&pkg_id=eq.${enc(pkgId)}`, { risk_id: r.id });
+    } catch(e) { /* wajar bila risiko ini belum punya data Pemantauan RTP */ }
+    sbAuditLog('RENAME_RISK', r.id, pkgId, { id: oldId }, { id: r.id });
+  }
+  return gsSaveOneRisk(pkgId, r, true);   // simpan sisa perubahan lainnya
 }
 
 // Alias untuk kompatibilitas
@@ -5541,21 +5596,29 @@ function editPagu() {
   document.getElementById('pagu-input').select();
 }
 
-function savePagu() {
+async function savePagu() {
   const val = parseFloat(document.getElementById('pagu-input').value);
   if (!val || val <= 0) { alert('Pagu harus lebih dari 0'); return; }
-  PAGU = val;
-  localStorage.setItem('manrisk-pagu', val);
-  // Update tampilan di sidebar
-  document.getElementById('pagu-display').textContent = 'Rp ' + val.toLocaleString('id-ID');
+  if (!sbUser) { alert('Login dulu agar Pagu tersimpan untuk semua pengguna.'); return; }
+  const oldVal = PAGU;
+  try {
+    // simpan ke server DULU; tampilan baru berubah bila server menerima
+    await SB.upsert('app_settings', { key: 'pagu', value: String(val), updated_by: sbUser.email, updated_at: new Date().toISOString() });
+  } catch(e) {
+    const why = String(e.message).includes('PGRST205') ? 'tabel app_settings belum dibuat di Supabase (jalankan SQL-nya)' : sbExplainError(e);
+    showToast('❌ Pagu GAGAL disimpan ke server: ' + why, 7000);
+    console.error('[SB Pagu]', e);
+    return;
+  }
+  sbApplyPagu(val);
   document.getElementById('pagu-edit-wrap').classList.remove('open');
   // Re-render dashboard dan tab yang aktif agar hitungan % terbaru
   renderDashboard();
   if (currentPage && packages[currentPage]) {
     renderPkgTab(currentPage, currentTab[currentPage] || 0);
   }
-  showToast('✅ Pagu BGTS diperbarui: Rp ' + val.toLocaleString('id-ID'));
-  markUnsaved();
+  sbAuditLog('PAGU_UPDATE', null, null, { pagu: oldVal }, { pagu: val });
+  showToast('✅ Pagu BGTS disimpan untuk semua pengguna: Rp ' + val.toLocaleString('id-ID'));
 }
 
 function cancelPagu() {
@@ -6343,6 +6406,14 @@ function doEditRisk() {
   if(!newFinbench||newFinbench<=0) markEr('er-finbench', 'Financial Benchmark harus diisi'); else markOk('er-finbench');
   if(errs.length > 0) { showToast('⚠️ ' + errs[0], 4000); return; }
 
+  const newId = document.getElementById('er-id').value.trim() || r.id;
+  document.getElementById('er-id')?.classList.remove('invalid');
+  if (newId !== r.id && packages[pkgId].risks.some((x, i) => i !== rIdx && x.id === newId)) {
+    document.getElementById('er-id')?.classList.add('invalid');
+    showToast('⚠️ Kode ' + newId + ' sudah dipakai risiko lain di paket ini', 4000);
+    return;
+  }
+  const oldId = r.id;
   const selKat = [...document.querySelectorAll('#er-kat-chips .kat-chip.selected')].map(b=>b.dataset.val).join('; ');
   const selJenis = [...document.querySelectorAll('.er-jenis-cb:checked')].map(c=>c.value).join('; ');
 
@@ -6377,7 +6448,7 @@ function doEditRisk() {
     luaran:          document.getElementById('er-luaran').value.trim(),
   });
 
-  gsSaveOneRisk(pkgId, r, true); // auto-save ke Supabase
+  sbSaveEditedRisk(pkgId, r, oldId); // auto-save ke Supabase
   closeModal('edit-risk-modal');
   buildPkgNav();
 
