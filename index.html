@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ManRisk BGTS 2026 — V5-16 Supabase</title>
+<title>ManRisk BGTS 2026 — V5-30 Supabase</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════
@@ -1339,7 +1339,7 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
     </div>
     <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:2px">
       <div style="font-size:9px;color:var(--slate);letter-spacing:1px;text-transform:uppercase">Versi</div>
-      <div style="font-weight:700;color:var(--gold-lt);font-size:12px">ManRisk BGTS V5</div>
+      <div style="font-weight:700;color:var(--gold-lt);font-size:12px">ManRisk BGTS v5-30</div>
       <div style="font-size:10px;color:var(--slate);margin-top:2px" id="sidebar-date"></div>
     </div>
   </div>
@@ -2075,7 +2075,17 @@ body.light-mode ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
 <script>
 
 // ═══════════════════════════════════════════════════════
-//  VERSI: v5-28 (2026-07-28) — Tab baru "Tinjauan Risiko Baru" (Tahap 1
+//  VERSI: v5-30 (2026-10-13) — Keandalan simpan data. Penyebab: isian rekan tampil di layar
+//  tetapi tidak sampai ke Supabase (simpan gagal hanya memunculkan toast 5 detik; autosave
+//  gsSaveAll() menimpa data antar pengguna). Perubahan: (1) banner merah PERMANEN + tombol
+//  "Coba simpan lagi" bila simpan risiko gagal; (2) token login diperbarui otomatis sebelum
+//  simpan dan diulang 1x bila server menjawab 401, satu jalur refresh (anti-balapan);
+//  (3) autosave gsSaveAll() dihentikan, tiap aksi menyimpan record yang diubah saja;
+//  (4) pilihan Respon Risiko di tab Evaluasi kini tersimpan ke server (sebelumnya hanya
+//  di layar); (5) peringatan sebelum Muat ulang/Logout/tutup tab bila ada data belum
+//  tersimpan; (6) nomor versi tampil di footer sidebar. Tidak ada perubahan skema SQL.
+//
+//  VERSI SEBELUMNYA: v5-28 (2026-07-28) — Tab baru "Tinjauan Risiko Baru" (Tahap 1
 //  dari Lampiran C SE Menteri PUPR 12/2024). Fondasi data & CRUD dasar:
 //  tambah/edit/hapus entri per paket (Tahun, Semester, Nama Kejadian,
 //  Pernyataan Risiko, Penyebab Risiko, Skor K/D, Respon Risiko, Status
@@ -2242,17 +2252,53 @@ const SBAuth = {
   }
 };
 
-// Auto-refresh session before expiry
-setInterval(async () => {
+// ─── v5-30: refresh token terpusat ───────────────────────────
+// Satu jalur refresh untuk: interval, sebelum setiap request, dan saat
+// server menjawab 401. Refresh token Supabase berotasi, sehingga dua
+// refresh bersamaan dengan token yang sama bisa saling menggagalkan.
+let _sbRefreshPromise = null;
+
+function sbSessionExpiredError() {
+  const e = new Error('Sesi login berakhir. Silakan logout lalu login ulang.');
+  e.code = 'SESSION_EXPIRED';
+  return e;
+}
+
+async function sbEnsureFreshToken(force) {
   if (!_sbSession) return;
-  const expiresAt = _sbSession.expires_at * 1000;
-  if (Date.now() > expiresAt - 5 * 60 * 1000) { // 5 menit sebelum expire
-    try {
-      const d = await SBAuth.refreshToken(_sbSession.refresh_token);
-      _sbSession = { access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
-      localStorage.setItem('sbSession', JSON.stringify(_sbSession));
-    } catch(e) { console.warn('[Auth] Refresh token gagal:', e.message); }
+  const msLeft = (_sbSession.expires_at || 0) * 1000 - Date.now();
+  if (!force && msLeft > 2 * 60 * 1000) return;        // masih > 2 menit: aman
+  if (!_sbRefreshPromise) {
+    _sbRefreshPromise = SBAuth.refreshToken(_sbSession.refresh_token)
+      .then(d => {
+        _sbSession = {
+          access_token:  d.access_token,
+          refresh_token: d.refresh_token,
+          expires_at:    d.expires_at || (Math.floor(Date.now() / 1000) + (d.expires_in || 3600)),
+        };
+        localStorage.setItem('sbSession', JSON.stringify(_sbSession));
+      })
+      .finally(() => { _sbRefreshPromise = null; });
   }
+  await _sbRefreshPromise;
+}
+
+// fetch dengan token segar + satu kali ulang bila server menjawab 401
+async function sbFetch(url, opts) {
+  opts = opts || {};
+  await sbEnsureFreshToken().catch(() => {});          // proaktif; kegagalan ditangani di jalur 401
+  const withAuth = () => ({ ...(opts.headers || {}), 'Authorization': 'Bearer ' + sbGetToken() });
+  let r = await fetch(url, { ...opts, headers: withAuth() });
+  if (r.status === 401 && _sbSession) {
+    try { await sbEnsureFreshToken(true); } catch (e) { throw sbSessionExpiredError(); }
+    r = await fetch(url, { ...opts, headers: withAuth() });
+    if (r.status === 401) throw sbSessionExpiredError();
+  }
+  return r;
+}
+
+setInterval(() => {
+  sbEnsureFreshToken().catch(e => console.warn('[Auth] Refresh token gagal:', e.message));
 }, 60 * 1000); // cek tiap menit
 
 // ─── Supabase REST helper ────────────────────────────
@@ -2265,7 +2311,7 @@ const SB = {
   }),
 
   async get(table, params = '') {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, {
+    const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, {
       headers: this.headers()
     });
     if (!r.ok) throw new Error(await r.text());
@@ -2273,7 +2319,7 @@ const SB = {
   },
 
   async post(table, body) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: 'POST', headers: this.headers(),
       body: JSON.stringify(body)
     });
@@ -2282,16 +2328,15 @@ const SB = {
   },
 
   async patch(table, filter, body) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+    const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
       method: 'PATCH', headers: this.headers(),
       body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error(await r.text());
     const result = await r.json();
-    // PENTING: Supabase/PostgREST bisa membalas 200 OK dengan array KOSONG
-    // kalau tidak ada baris yang cocok/diizinkan diupdate (misal RLS
-    // memblokir UPDATE walau SELECT diizinkan). Tanpa cek ini, kode akan
-    // mengira update berhasil padahal tidak ada perubahan tersimpan di server.
+    // PENTING: PostgREST bisa membalas 200 OK dengan array KOSONG kalau tidak ada
+    // baris yang cocok/diizinkan diupdate (misal RLS memblokir UPDATE). Tanpa cek ini
+    // kode mengira update berhasil padahal tidak ada perubahan tersimpan di server.
     if (Array.isArray(result) && result.length === 0) {
       throw new Error(`Update ke tabel "${table}" tidak mengubah data apapun — kemungkinan RLS (Row Level Security) belum mengizinkan UPDATE, atau filter (${filter}) tidak cocok dengan baris manapun.`);
     }
@@ -2299,7 +2344,7 @@ const SB = {
   },
 
   async delete(table, filter) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+    const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
       method: 'DELETE', headers: this.headers()
     });
     if (!r.ok) throw new Error(await r.text());
@@ -2307,7 +2352,7 @@ const SB = {
   },
 
   async upsert(table, body) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: 'POST',
       headers: { ...this.headers(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify(body)
@@ -2566,6 +2611,7 @@ async function gsDoSignup() {
 }
 
 async function gsLogout() {
+  if (sbHasFailedSaves() && !confirm('Ada risiko yang BELUM tersimpan ke server. Logout akan menghapusnya dari layar.\n\nTetap logout?')) return;
   // ── PENTING: Pastikan autosave yang masih tertunda (debounce) selesai
   //    dikirim ke Supabase DULU sebelum kita hapus sesi & cache lokal.
   //    Tanpa ini, perubahan yang baru diketik bisa hilang permanen kalau
@@ -2669,6 +2715,7 @@ function gsUpdateUI(loggedIn, skipSync) {
 //  LOAD ALL — Muat semua risiko dari Supabase
 // ═══════════════════════════════════════════════════════
 async function sbLoadAll() {
+  if (sbHasFailedSaves() && !confirm('Ada risiko yang BELUM tersimpan ke server. Memuat ulang akan menghapusnya dari layar.\n\nTetap muat ulang?')) return;
   if (!sbUser) { alert('Login dulu!'); return; }
   const btn = document.getElementById('btn-gs-load');
   if (btn) { btn.textContent = '⏳...'; btn.disabled = true; }
@@ -2715,22 +2762,80 @@ const gsLoadAll = sbLoadAll;
 // ═══════════════════════════════════════════════════════
 //  SAVE ONE RISK
 // ═══════════════════════════════════════════════════════
+// ─── v5-30: pencatat simpan-gagal + banner permanen ───────────
+// Risiko yang gagal tersimpan TIDAK lagi hanya memunculkan toast 5 detik.
+// Banner merah tetap tampil sampai risikonya berhasil disimpan ulang.
+const _failedSaves = {};   // "pkgId::riskId" -> { pkgId, riskId, isEdit, reason }
+function sbHasFailedSaves() { return Object.keys(_failedSaves).length > 0; }
+
+function sbExplainError(e) {
+  const m = String((e && e.message) || e);
+  if (e && e.code === 'SESSION_EXPIRED')  return 'Sesi login berakhir — logout lalu login ulang.';
+  if (m.includes('PGRST204'))             return 'Kolom database belum sesuai versi aplikasi — hubungi admin.';
+  if (m.includes('row-level security') || m.includes('42501')) return 'Ditolak kebijakan keamanan (RLS) — hubungi admin.';
+  if (m.includes('Failed to fetch'))      return 'Tidak ada koneksi ke server.';
+  return m.slice(0, 160);
+}
+
+function sbRenderSaveBanner() {
+  let el = document.getElementById('save-fail-banner');
+  const items = Object.values(_failedSaves);
+  if (items.length === 0) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'save-fail-banner';
+    // z-index 150: di atas modal (100), di bawah dialog hapus (200)
+    el.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:150;max-width:min(720px,94vw);background:#3a0000;color:#ffd0d0;border:2px solid #ff3b3b;border-radius:10px;padding:12px 16px;font-size:13px;line-height:1.6;box-shadow:0 8px 32px rgba(0,0,0,0.6)';
+    document.body.appendChild(el);
+    if (!document.getElementById('save-fail-banner-print')) {
+      const st = document.createElement('style');
+      st.id = 'save-fail-banner-print';
+      st.textContent = '@media print{#save-fail-banner{display:none!important}}';
+      document.head.appendChild(st);
+    }
+  }
+  const list = items.slice(0, 3).map(f => '<b>' + escTa(f.riskId) + '</b> (' + escTa(f.reason) + ')').join('; ');
+  const more = items.length > 3 ? ' dan ' + (items.length - 3) + ' lainnya' : '';
+  el.innerHTML = '⚠️ <b>' + items.length + ' risiko BELUM tersimpan ke server</b>: ' + list + more
+    + '<div style="margin-top:8px">'
+    + '<button onclick="sbRetryFailedSaves(this)" style="padding:6px 14px;border:none;border-radius:6px;background:#ff3b3b;color:#fff;font-weight:700;cursor:pointer;font-family:inherit">🔁 Coba simpan lagi</button>'
+    + '<span style="margin-left:10px;font-size:11px;opacity:0.85">Jangan refresh atau tutup halaman dulu — data ini hanya ada di layar ini.</span>'
+    + '</div>';
+}
+
+async function sbRetryFailedSaves(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Menyimpan...'; }
+  for (const f of Object.values(_failedSaves)) {
+    const risk = packages[f.pkgId]?.risks.find(r => r.id === f.riskId);
+    if (!risk) { delete _failedSaves[f.pkgId + '::' + f.riskId]; continue; }
+    await gsSaveOneRisk(f.pkgId, risk, f.isEdit);
+  }
+  sbRenderSaveBanner();
+}
+
 async function gsSaveOneRisk(pkgId, risk, isEdit) {
   if (!sbUser) {
     cacheLocalData(); // simpan ke cache jika offline
-    return;
+    return false;
   }
+  const key = pkgId + '::' + risk.id;
   setSyncState('syncing');
   try {
     await SB.upsert('risks', riskToRow(risk, pkgId));
+    delete _failedSaves[key];
     cacheLocalData(); // cache SETELAH berhasil simpan ke Supabase (bukan sebelum)
     sbAuditLog(isEdit ? 'UPDATE' : 'INSERT', risk.id, pkgId, null, null);
     setSyncState('synced');
+    sbRenderSaveBanner();
     showToast('✅ Risiko ' + risk.id + ' tersimpan ke Supabase');
+    return true;
   } catch(e) {
+    _failedSaves[key] = { pkgId, riskId: risk.id, isEdit: !!isEdit, reason: sbExplainError(e) };
     setSyncState('unsynced');
-    showToast('❌ Gagal simpan: ' + e.message, 5000);
+    sbRenderSaveBanner();
+    showToast('❌ Gagal simpan ' + risk.id + ': ' + sbExplainError(e), 6000);
     console.error('[SB Save]', e);
+    return false;
   }
 }
 
@@ -2738,6 +2843,7 @@ async function gsSaveOneRisk(pkgId, risk, isEdit) {
 //  SAVE ALL — Simpan semua risiko ke Supabase
 // ═══════════════════════════════════════════════════════
 async function gsSaveAll() {
+  if (sbUser && !confirm('Simpan SEMUA data di layar ini ke server?\n\nData di server akan ditimpa dengan isi layar ini. Jika layar ini sudah lama dibuka, tekan "⬇️ Muat" dulu agar tidak menimpa isian rekan lain.\n\nLanjutkan?')) return;
   if (!sbUser) { alert('Login dulu!'); return; }
   setSyncState('syncing');
   const btn = document.getElementById('btn-gs-save');
@@ -3040,6 +3146,7 @@ function populateRTPRiskSelect(pkgId, selectedRiskId) {
 const RTP_BUCKET = 'rtp-bukti-dukung';
 
 async function uploadRTPBukti(pkgId, file) {
+  await sbEnsureFreshToken().catch(() => {});
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const path = `${pkgId}/${Date.now()}_${safeName}`;
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${RTP_BUCKET}/${encodeURIComponent(path)}`, {
@@ -4596,9 +4703,27 @@ function buildPkgNav() {
 }
 
 //  APPROVAL TOGGLE
-function setRespon(pkgId, rIdx, val) {
-  if(packages[pkgId]&&packages[pkgId].risks[rIdx]) {
-    packages[pkgId].risks[rIdx].respon = val;
+async function setRespon(pkgId, rIdx, val) {
+  const r = packages[pkgId]?.risks[rIdx];
+  if (!r) return;
+  const oldVal = r.respon || '';
+  if (oldVal === val) return;
+  r.respon = val;
+  cacheLocalData();
+  if (!sbUser) return;
+  try {
+    await SB.patch('risks',
+      `id=eq.${encodeURIComponent(r.id)}&pkg_id=eq.${encodeURIComponent(pkgId)}`,
+      { respon: val }
+    );
+    sbAuditLog('UPDATE', r.id, pkgId, { respon: oldVal }, { respon: val });
+    setSyncState('synced');
+    showToast('💾 Respon risiko disimpan', 1500);
+  } catch(e) {
+    r.respon = oldVal;
+    if (currentPage === pkgId) renderPkgTab(pkgId, currentTab[pkgId] || 0);   // kembalikan dropdown
+    showToast('❌ Gagal menyimpan respon risiko: ' + sbExplainError(e), 6000);
+    console.error('[SB Respon]', e);
   }
 }
 
@@ -5901,19 +6026,18 @@ function setSyncState(state) {
 }
 
 function markUnsaved() {
-  // Auto-save langsung saat ada perubahan (tidak perlu klik Simpan manual)
-  if (sbUser && document.getElementById('btn-gs-save')?.style.display !== 'none') {
-    // Trigger auto-save dengan debounce 500ms
-    clearTimeout(markUnsaved._timer);
-    markUnsaved._timer = setTimeout(() => gsSaveAll(), 500);
-  }
+  // v5-30: sengaja KOSONG. Dulu fungsi ini memicu gsSaveAll() yang meng-upsert SEMUA
+  // risiko di layar setiap ada perubahan, sehingga layar yang usang bisa menimpa isian
+  // rekan lain. Kini setiap aksi menyimpan record yang diubah saja (gsSaveOneRisk,
+  // toggleAppr, saveCatatan, setRespon, dst). Fungsi dipertahankan agar pemanggil lama
+  // (doDelete, toggleAppr, saveCatatan, savePagu) tidak error.
 }
 markUnsaved._timer = null;
 
 // Peringatkan pengguna jika menutup tab/browser saat masih ada perubahan
 // yang belum selesai terkirim ke Supabase (autosave masih tertunda / sedang jalan).
 window.addEventListener('beforeunload', function (e) {
-  if (_unsavedChanges || markUnsaved._timer) {
+  if (_unsavedChanges || markUnsaved._timer || sbHasFailedSaves()) {
     e.preventDefault();
     e.returnValue = 'Ada perubahan yang belum tersimpan ke server. Yakin ingin menutup halaman?';
     return e.returnValue;
